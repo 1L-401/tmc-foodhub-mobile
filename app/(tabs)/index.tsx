@@ -1,98 +1,183 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { ImageBackground, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import { TmcLogo } from '@/components/tmc-logo';
+
+const STATS = [
+  {
+    label: 'Restaurants',
+    value: '100+',
+  },
+  {
+    label: 'Fast Delivery',
+    value: '24/7',
+  },
+  {
+    label: 'Hot Deals',
+    value: 'Daily',
+  },
+] as const;
 
 export default function HomeScreen() {
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+    <ImageBackground
+      source={require('@/assets/images/main_hero.png')}
+      style={styles.background}
+      imageStyle={styles.backgroundImage}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+        <View style={styles.overlay} />
+        <View style={styles.content}>
+          <View style={styles.topCard}>
+            <View style={styles.brandRow}>
+              <TmcLogo width={64} height={64} />
+              <View style={styles.brandCopy}>
+                <Text style={styles.eyebrow}>TMC Foodhub</Text>
+                <Text style={styles.brandTitle}>Food delivered with local flavor.</Text>
+              </View>
+            </View>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+            <View style={styles.statsRow}>
+              {STATS.map((item) => (
+                <View key={item.label} style={styles.statCard}>
+                  <Text style={styles.statValue}>{item.value}</Text>
+                  <Text style={styles.statLabel}>{item.label}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.bottomPanel}>
+            <Text style={styles.sectionLabel}>Ready to order</Text>
+            <Text style={styles.heading}>Browse nearby picks and start your next meal.</Text>
+
+            <View style={styles.highlightRow}>
+              <View style={styles.highlightIcon}>
+                <MaterialCommunityIcons name="map-marker-radius-outline" size={20} color="#F3B321" />
+              </View>
+              <Text style={styles.highlightText}>Fresh local choices, promos, and live order updates.</Text>
+            </View>
+          </View>
+        </View>
+      </SafeAreaView>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
+  background: {
+    flex: 1,
+    backgroundColor: '#160D09',
+  },
+  backgroundImage: {
+    resizeMode: 'cover',
+  },
+  safeArea: {
+    flex: 1,
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(22, 13, 9, 0.62)',
+  },
+  content: {
+    flex: 1,
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingBottom: 24,
+  },
+  topCard: {
+    marginTop: 8,
+    borderRadius: 24,
+    padding: 18,
+    backgroundColor: 'rgba(17, 11, 8, 0.58)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 14,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  brandCopy: {
+    flex: 1,
+    gap: 4,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  eyebrow: {
+    color: '#F3B321',
+    fontSize: 13,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  brandTitle: {
+    color: '#FFFFFF',
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: '800',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 18,
+  },
+  statCard: {
+    flex: 1,
+    borderRadius: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  statValue: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  statLabel: {
+    marginTop: 4,
+    color: 'rgba(255, 255, 255, 0.78)',
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600',
+  },
+  bottomPanel: {
+    borderRadius: 28,
+    padding: 22,
+    backgroundColor: 'rgba(172, 29, 16, 0.88)',
+  },
+  sectionLabel: {
+    color: 'rgba(255, 244, 230, 0.82)',
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  heading: {
+    marginTop: 10,
+    color: '#FFFFFF',
+    fontSize: 32,
+    lineHeight: 36,
+    fontWeight: '800',
+    letterSpacing: -0.8,
+  },
+  highlightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 18,
+  },
+  highlightIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+  },
+  highlightText: {
+    flex: 1,
+    color: '#FFF4E6',
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: '600',
   },
 });
