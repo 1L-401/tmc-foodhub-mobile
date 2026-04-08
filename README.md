@@ -1,50 +1,75 @@
-# Welcome to your Expo app 👋
+# TMC Foodhub Mobile
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+TMC Foodhub Mobile is a cross-platform mobile application built using **React Native** and **Expo**. It serves as the mobile interface for the TMC Foodhub ecosystem, enabling seamless onboarding, authentication, and platform access.
 
-## Get started
+## Tech Stack
 
-1. Install dependencies
+- **Framework**: React Native with Expo
+- **Navigation**: Expo Router (File-based routing)
+- **Styling**: React Native StyleSheet
+- **Animations**: React Native Reanimated
+- **Icons**: `@expo/vector-icons` & Custom SVGs (`react-native-svg`)
 
+## Features
+
+- **Get Started Screen**: Introduction screen with dynamic sizing and fluid layouts.
+- **Login Flow**: Complete authentication UI tailored to brand specifications, including custom inputs, Google/Facebook login integrations, and interactive cascading components.
+- **Tab Navigation**: Standard bottom-tab exploration routing.
+
+## Prerequisites
+
+Before running the project, ensure you have the following installed:
+- [Node.js](https://nodejs.org/en/) (LTS recommended)
+- [npm](https://www.npmjs.com/) or yarn
+- Expo Go app on your physical device (available on App Store / Google Play), or an Android/iOS emulator installed on your machine.
+
+## Installation
+
+1. **Clone the repository** (if you haven't already):
+   ```bash
+   git clone <your-repository-url>
+   cd tmc-foodhub-mobile
+   ```
+
+2. **Install dependencies**:
    ```bash
    npm install
    ```
 
-2. Start the app
+## Running the App
 
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+Start the Expo development server:
 
 ```bash
-npm run reset-project
+npx expo start
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+This will run the Metro bundler. From here, you can:
+- **Scan the QR code** using the Expo Go app on your physical device.
+- Press `a` to open the app on an Android Emulator.
+- Press `i` to open the app on an iOS Simulator.
+- Press `w` to open the app in a web browser.
 
-## Learn more
+## Project Structure
 
-To learn more about developing your project with Expo, look at the following resources:
+- `app/`: Expo Router file-based navigation screens.
+  - `_layout.tsx`: Root layout and Stack navigation configuration.
+  - `index.tsx`: Splash/Redirect handling.
+  - `get-started.tsx`: Onboarding hero screen.
+  - `login.tsx`: User authentication and sign-in.
+  - `(tabs)/`: Protected dashboard/tabbed pages.
+- `components/`: Reusable UI elements (e.g., `tmc-logo.tsx`, `google-logo.tsx`).
+- `assets/`: Static resources like fonts, images, and brand SVGs.
+- `constants/`: Configuration values, themes, and colors.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## Scripts
 
-## Join the community
+- `npm start` - Starts the Expo Metro bundler.
+- `npm run android` - Starts the bundler and directly opens the Android emulator.
+- `npm run ios` - Starts the bundler and directly opens the iOS simulator.
+- `npm run web` - Runs the application in the web profile.
+- `npm run lint` - Lints the codebase for syntax or stylistic errors using ESLint.
 
-Join our community of developers creating universal apps.
+## License
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+All rights reserved by TMC Foodhub.
