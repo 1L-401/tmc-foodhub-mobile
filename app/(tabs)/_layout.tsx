@@ -83,9 +83,9 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     borderTopWidth: 0,
-    height: Platform.OS === 'ios' ? 88 : 68,
+    height: Platform.OS === 'ios' ? 88 : 84,
     paddingTop: 8,
-    paddingBottom: Platform.OS === 'ios' ? 28 : 12,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 16,
     elevation: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
@@ -95,7 +95,6 @@ const styles = StyleSheet.create({
   tabBarLabel: {
     fontSize: 11,
     fontWeight: '700',
-    paddingBottom: 4,
   },
   tabBarItem: {
     gap: 2,
