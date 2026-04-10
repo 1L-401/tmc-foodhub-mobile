@@ -1,19 +1,19 @@
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import React, { useState } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
-import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { StatusBar } from 'expo-status-bar';
 
 import { GoogleLogo } from '@/components/google-logo';
 import { TmcLogo } from '@/components/tmc-logo';
@@ -119,7 +119,7 @@ export default function LoginScreen() {
                 </View>
                 <Text style={styles.optionText}>Remember Me</Text>
               </Pressable>
-              <Pressable>
+              <Pressable onPress={() => router.push('/forgot-password')}>
                 <Text style={styles.forgotPasswordText}>Forgot Password</Text>
               </Pressable>
             </View>

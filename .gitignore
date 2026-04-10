@@ -37,7 +37,10 @@ yarn-error.*
 *.tsbuildinfo
 
 app-example
+foragent.md
 
 # generated native folders
 /ios
 /android
+
+
