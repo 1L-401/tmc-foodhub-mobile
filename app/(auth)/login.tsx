@@ -119,7 +119,7 @@ export default function LoginScreen() {
                 </View>
                 <Text style={styles.optionText}>Remember Me</Text>
               </Pressable>
-              <Pressable onPress={() => router.push('/forgot-password')}>
+              <Pressable onPress={() => router.push('/(auth)/forgot-password')}>
                 <Text style={styles.forgotPasswordText}>Forgot Password</Text>
               </Pressable>
             </View>
@@ -160,7 +160,7 @@ export default function LoginScreen() {
           {/* Sign Up Link */}
           <Animated.View entering={FadeInUp.delay(300).springify()} style={styles.signupContainer}>
             <Text style={styles.signupText}>Don&apos;t have an account? </Text>
-            <Pressable onPress={() => router.push('/sign-up')}>
+            <Pressable onPress={() => router.push('/(auth)/sign-up')}>
               <Text style={styles.signupLinkText}>Sign up</Text>
             </Pressable>
           </Animated.View>

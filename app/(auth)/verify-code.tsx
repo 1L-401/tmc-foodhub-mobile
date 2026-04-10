@@ -40,7 +40,7 @@ export default function VerifyCodeScreen() {
     }
 
     setErrorMessage('');
-    router.push('/create-new-password');
+    router.push('/(auth)/create-new-password');
   };
 
   const handleResend = () => {

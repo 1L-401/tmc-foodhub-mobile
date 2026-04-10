@@ -66,7 +66,7 @@ export default function GetStartedScreen() {
               ))}
             </View>
 
-            <Pressable style={styles.button} onPress={() => router.push('/login')}>
+            <Pressable style={styles.button} onPress={() => router.push('/(auth)/login')}>
               <Text style={styles.buttonText}>Get Started</Text>
             </Pressable>
 

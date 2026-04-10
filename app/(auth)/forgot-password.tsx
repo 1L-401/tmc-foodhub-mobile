@@ -45,7 +45,7 @@ export default function ForgotPasswordScreen() {
     }
 
     setErrorMessage('');
-    router.push('/verify-code');
+    router.push('/(auth)/verify-code');
   };
 
   return (

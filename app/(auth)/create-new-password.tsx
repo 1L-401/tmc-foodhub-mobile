@@ -60,7 +60,7 @@ export default function CreateNewPasswordScreen() {
       return;
     }
 
-    router.replace('/login');
+    router.replace('/(auth)/login');
   };
 
   return (
