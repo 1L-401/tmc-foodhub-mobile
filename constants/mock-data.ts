@@ -1,12 +1,12 @@
 export const CUISINES = [
-  { id: '1', name: 'Pizza', icon: 'pizza', color: '#FDECEA', iconColor: '#E53935' },
-  { id: '2', name: 'Burgers', icon: 'hamburger', color: '#FFF3E0', iconColor: '#FB8C00' },
-  { id: '3', name: 'Coffee', icon: 'coffee', color: '#FFF8E1', iconColor: '#F9A825' },
-  { id: '4', name: 'Cakes', icon: 'cake-variant', color: '#FCE4EC', iconColor: '#E91E63' },
-  { id: '5', name: 'Ice Cream', icon: 'ice-cream', color: '#E8F5E9', iconColor: '#43A047' },
-  { id: '6', name: 'Chicken', icon: 'food-drumstick', color: '#FFF3E0', iconColor: '#EF6C00' },
-  { id: '7', name: 'Noodles', icon: 'noodles', color: '#FFFDE7', iconColor: '#F57F17' },
-  { id: '8', name: 'Desserts', icon: 'cupcake', color: '#F3E5F5', iconColor: '#8E24AA' },
+  { id: '1', name: 'Pizza', icon: 'pizza', color: '#FCECEB', iconColor: '#8E170C' },
+  { id: '2', name: 'Burgers', icon: 'hamburger', color: '#FCECEB', iconColor: '#8E170C' },
+  { id: '3', name: 'Coffee', icon: 'coffee-outline', color: '#FCECEB', iconColor: '#8E170C' },
+  { id: '4', name: 'Cakes', icon: 'cake-variant-outline', color: '#FCECEB', iconColor: '#8E170C' },
+  { id: '5', name: 'Ice Cream', icon: 'ice-cream', color: '#FCECEB', iconColor: '#8E170C' },
+  { id: '6', name: 'Chicken', icon: 'food-drumstick-outline', color: '#FCECEB', iconColor: '#8E170C' },
+  { id: '7', name: 'Noodles', icon: 'noodles', color: '#FCECEB', iconColor: '#8E170C' },
+  { id: '8', name: 'Desserts', icon: 'cupcake', color: '#FCECEB', iconColor: '#8E170C' },
 ];
 
 export const TOP_BRANDS = [

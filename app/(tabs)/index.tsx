@@ -129,7 +129,7 @@ export default function HomeScreen() {
         </Animated.View>
 
         {/* Bottom spacer */}
-        <View style={{ height: 24 }} />
+        <View style={{ height: 80 }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -175,6 +175,8 @@ const styles = StyleSheet.create({
     borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#EFEFEF',
   },
   horizontalList: {
     paddingHorizontal: 16,
@@ -185,16 +187,18 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   cuisineIcon: {
-    width: 58,
-    height: 58,
-    borderRadius: 18,
+    width: 64,
+    height: 64,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#F3D8D8',
   },
   cuisineLabel: {
     fontSize: 12,
-    fontWeight: '500',
-    color: '#444',
+    fontWeight: '700',
+    color: '#8E170C',
   },
   brandItem: {
     alignItems: 'center',
