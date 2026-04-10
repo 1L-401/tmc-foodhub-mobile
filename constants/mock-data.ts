@@ -88,3 +88,65 @@ export const RESTAURANTS = [
 ];
 
 export const FILTERS = ['Sort by', 'Cuisines', 'Dietary', 'Ratings'];
+
+export const RESTAURANT_MENU = {
+  restaurant: {
+    id: '1',
+    name: 'Burger King - SM Baguio',
+    categories: ['Burgers', 'BBQ'],
+    rating: 4.2,
+    reviews: 1972,
+    isOpen: true,
+    distance: '2.5 km radius',
+    deliveryTime: '30-45 mins delivery',
+    logo: 'https://via.placeholder.com/60/FFFFFF/FDECEA?text=BK',
+  },
+  menuCategories: ['Popular', 'Group Meals', 'Drinks', 'Desserts'],
+  items: [
+    {
+      id: 'm1',
+      title: 'Double Cheese Burger',
+      description: 'A classic juicy beef patty layered with melted cheese, lettuce, and tomatoes.',
+      price: 7.00,
+      rating: 4.2,
+      reviews: 1972,
+      isBestSeller: true,
+      category: 'Popular',
+      image: 'https://via.placeholder.com/150/FFF3E0/FB8C00?text=Burger',
+    },
+    {
+      id: 'm2',
+      title: 'Grilled Steak',
+      description: 'Juicy, flame-grilled steak cooked to perfection with sides.',
+      price: 12.00,
+      rating: 4.2,
+      reviews: 1972,
+      isBestSeller: false,
+      category: 'Popular',
+      image: 'https://via.placeholder.com/150/FFF3E0/FB8C00?text=Steak',
+    },
+    {
+      id: 'm3',
+      title: 'Black Iced Coffee',
+      description: 'Classic iced black coffee to keep you awake.',
+      price: 3.00,
+      rating: 4.2,
+      reviews: 1972,
+      isBestSeller: false,
+      category: 'Popular',
+      image: 'https://via.placeholder.com/150/FFF3E0/FB8C00?text=Coffee',
+    },
+    {
+      id: 'm4',
+      title: 'French Fries',
+      description: 'Crispy golden fries cooked fresh.',
+      price: 4.00,
+      rating: 4.2,
+      reviews: 1972,
+      isBestSeller: false,
+      category: 'Popular',
+      image: 'https://via.placeholder.com/150/FFF3E0/FB8C00?text=Fries',
+    },
+  ],
+};
+

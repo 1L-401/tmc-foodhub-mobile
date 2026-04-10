@@ -2,6 +2,8 @@ import React from 'react';
 import { View, Text, Pressable, StyleSheet, Dimensions } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
+import { useRouter } from 'expo-router';
+
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH * 0.55;
 
@@ -17,8 +19,13 @@ export type OrderAgainItem = {
 };
 
 export function OrderAgainCard({ item }: { item: OrderAgainItem }) {
+  const router = useRouter();
+
   return (
-    <Pressable style={styles.orderAgainCard}>
+    <Pressable 
+      style={styles.orderAgainCard}
+      onPress={() => router.push(`/restaurant/${item.id}`)}
+    >
       {/* Image placeholder */}
       <View style={[styles.orderAgainImage, { backgroundColor: item.color }]}>
         <MaterialCommunityIcons name="food" size={40} color="rgba(255,255,255,0.3)" />

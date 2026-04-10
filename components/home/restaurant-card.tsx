@@ -2,6 +2,8 @@ import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
+import { useRouter } from 'expo-router';
+
 export type RestaurantItem = {
   id: string;
   name: string;
@@ -15,8 +17,13 @@ export type RestaurantItem = {
 };
 
 export function RestaurantCard({ restaurant }: { restaurant: RestaurantItem }) {
+  const router = useRouter();
+
   return (
-    <Pressable style={styles.restaurantCard}>
+    <Pressable 
+      style={styles.restaurantCard}
+      onPress={() => router.push(`/restaurant/${restaurant.id}`)}
+    >
       {/* Image area */}
       <View style={[styles.restaurantImage, { backgroundColor: restaurant.color }]}>
         <MaterialCommunityIcons
