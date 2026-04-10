@@ -41,7 +41,10 @@ export default function RestaurantDetails() {
 
       {/* Info */}
       <Text style={styles.restaurantName}>{restaurant.name}</Text>
-      <View style={styles.tagsRow}>
+      <Pressable 
+        style={styles.tagsRow} 
+        onPress={() => router.push({ pathname: '/reviews/[id]', params: { id } })}
+      >
         <Text style={styles.brandTag}>{restaurant.categories.join(' • ')}</Text>
         <Text style={styles.dot}>•</Text>
         <MaterialCommunityIcons name="star" size={14} color="#F9A825" />
@@ -52,7 +55,7 @@ export default function RestaurantDetails() {
         <Text style={styles.ratingText}>
           {restaurant.rating} <Text style={styles.reviewsText}>({restaurant.reviews.toLocaleString()})</Text>
         </Text>
-      </View>
+      </Pressable>
 
       <View style={styles.statusRow}>
         {restaurant.isOpen && (

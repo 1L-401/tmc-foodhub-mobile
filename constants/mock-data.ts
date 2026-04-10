@@ -150,3 +150,44 @@ export const RESTAURANT_MENU = {
   ],
 };
 
+export const RESTAURANT_REVIEWS = {
+  restaurantId: '1',
+  summary: {
+    average: 4.6,
+    totalCount: 1248,
+    verifiedCount: 1240,
+    tags: 'Burgers',
+    distribution: [
+      { score: 5, count: 864, percentage: 69 },
+      { score: 4, count: 242, percentage: 19 },
+      { score: 3, count: 98, percentage: 8 },
+      { score: 2, count: 30, percentage: 2 },
+      { score: 1, count: 14, percentage: 1 },
+    ],
+  },
+  reviews: [
+    {
+      id: 'r1',
+      name: 'Maria L.',
+      avatar: 'https://randomuser.me/api/portraits/women/44.jpg',
+      time: '2 hours ago',
+      rating: 5,
+      text: 'The Lumpiang Shanghai is so crispy and still hot when it arrived! SM Baguio branch never fails to deliver quality food. Highly recommended for family dinners.',
+      photos: [
+        'https://via.placeholder.com/150/FFF3E0/FB8C00?text=Food'
+      ],
+      helpfulCount: 8,
+    },
+    {
+      id: 'r2',
+      name: 'James T.',
+      avatar: 'https://randomuser.me/api/portraits/men/46.jpg',
+      time: 'Yesterday at 2:30 pm',
+      rating: 5,
+      text: 'Great food as always. Delivery was a bit slow today due to the rain, but the rider was very polite and the packaging kept everything dry.',
+      photos: [],
+      helpfulCount: 29,
+    }
+  ]
+};
+
