@@ -1,183 +1,260 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { ImageBackground, StyleSheet, Text, View } from 'react-native';
+import React from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Pressable,
+  FlatList,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { TmcLogo } from '@/components/tmc-logo';
+import { SectionHeader } from '@/components/home/section-header';
+import { OrderAgainCard } from '@/components/home/order-again-card';
+import { RestaurantCard } from '@/components/home/restaurant-card';
+import {
+  CUISINES,
+  TOP_BRANDS,
+  ORDER_AGAIN,
+  RESTAURANTS,
+  FILTERS,
+} from '@/constants/mock-data';
 
-const STATS = [
-  {
-    label: 'Restaurants',
-    value: '100+',
-  },
-  {
-    label: 'Fast Delivery',
-    value: '24/7',
-  },
-  {
-    label: 'Hot Deals',
-    value: 'Daily',
-  },
-] as const;
-
+// ── Component ─────────────────────────────────────────────────
 export default function HomeScreen() {
   return (
-    <ImageBackground
-      source={require('@/assets/images/main_hero.png')}
-      style={styles.background}
-      imageStyle={styles.backgroundImage}>
-      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-        <View style={styles.overlay} />
-        <View style={styles.content}>
-          <View style={styles.topCard}>
-            <View style={styles.brandRow}>
-              <TmcLogo width={64} height={64} />
-              <View style={styles.brandCopy}>
-                <Text style={styles.eyebrow}>TMC Foodhub</Text>
-                <Text style={styles.brandTitle}>Food delivered with local flavor.</Text>
-              </View>
-            </View>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <StatusBar style="dark" translucent backgroundColor="transparent" />
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ─── Top Bar ─── */}
+        <Animated.View entering={FadeInDown.delay(50).springify()} style={styles.topBar}>
+          <TmcLogo width={40} height={40} />
+          <View style={styles.searchBar}>
+            <MaterialCommunityIcons name="magnify" size={20} color="#999" />
+            <Text style={styles.searchPlaceholder}>Search for restaurants, cuisines, o...</Text>
+          </View>
+          <Pressable style={styles.notifButton}>
+            <MaterialCommunityIcons name="bell-outline" size={24} color="#1A1A1A" />
+          </Pressable>
+        </Animated.View>
 
-            <View style={styles.statsRow}>
-              {STATS.map((item) => (
-                <View key={item.label} style={styles.statCard}>
-                  <Text style={styles.statValue}>{item.value}</Text>
-                  <Text style={styles.statLabel}>{item.label}</Text>
+        {/* ─── Cuisines ─── */}
+        <Animated.View entering={FadeInDown.delay(100).springify()}>
+          <SectionHeader title="Cuisines" />
+          <FlatList
+            data={CUISINES}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.horizontalList}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <Pressable style={styles.cuisineItem}>
+                <View style={[styles.cuisineIcon, { backgroundColor: item.color }]}>
+                  <MaterialCommunityIcons name={item.icon as any} size={26} color={item.iconColor} />
                 </View>
-              ))}
-            </View>
-          </View>
+                <Text style={styles.cuisineLabel}>{item.name}</Text>
+              </Pressable>
+            )}
+          />
+        </Animated.View>
 
-          <View style={styles.bottomPanel}>
-            <Text style={styles.sectionLabel}>Ready to order</Text>
-            <Text style={styles.heading}>Browse nearby picks and start your next meal.</Text>
+        {/* ─── Top Brands ─── */}
+        <Animated.View entering={FadeInDown.delay(150).springify()}>
+          <SectionHeader title="Top brands" />
+          <FlatList
+            data={TOP_BRANDS}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.horizontalList}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <Pressable style={styles.brandItem}>
+                <View style={[styles.brandIcon, { backgroundColor: item.bgColor }]}>
+                  <MaterialCommunityIcons name={item.icon as any} size={28} color="#1A1A1A" />
+                </View>
+                <Text style={styles.brandLabel} numberOfLines={1}>{item.name}</Text>
+              </Pressable>
+            )}
+          />
+        </Animated.View>
 
-            <View style={styles.highlightRow}>
-              <View style={styles.highlightIcon}>
-                <MaterialCommunityIcons name="map-marker-radius-outline" size={20} color="#F3B321" />
-              </View>
-              <Text style={styles.highlightText}>Fresh local choices, promos, and live order updates.</Text>
-            </View>
-          </View>
-        </View>
-      </SafeAreaView>
-    </ImageBackground>
+        {/* ─── Order Again ─── */}
+        <Animated.View entering={FadeInDown.delay(200).springify()}>
+          <SectionHeader title="Order again" />
+          <FlatList
+            data={ORDER_AGAIN}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.horizontalList}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <OrderAgainCard item={item} />
+            )}
+          />
+        </Animated.View>
+
+        {/* ─── Explore Restaurants Nearby ─── */}
+        <Animated.View entering={FadeInDown.delay(250).springify()}>
+          <Text style={styles.exploreTitle}>Explore restaurants nearby</Text>
+
+          {/* Filters */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filtersContainer}
+          >
+            <Pressable style={styles.filterIconButton}>
+              <MaterialCommunityIcons name="tune-variant" size={18} color="#1A1A1A" />
+            </Pressable>
+            {FILTERS.map((filter) => (
+              <Pressable key={filter} style={styles.filterChip}>
+                <Text style={styles.filterChipText}>{filter}</Text>
+                <MaterialCommunityIcons name="chevron-down" size={16} color="#555" />
+              </Pressable>
+            ))}
+          </ScrollView>
+
+          {/* Restaurant Cards */}
+          {RESTAURANTS.map((restaurant) => (
+            <RestaurantCard key={restaurant.id} restaurant={restaurant} />
+          ))}
+        </Animated.View>
+
+        {/* Bottom spacer */}
+        <View style={{ height: 80 }} />
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
+// ── Styles ────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  background: {
-    flex: 1,
-    backgroundColor: '#160D09',
-  },
-  backgroundImage: {
-    resizeMode: 'cover',
-  },
   safeArea: {
     flex: 1,
+    backgroundColor: '#FFFFFF',
   },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(22, 13, 9, 0.62)',
-  },
-  content: {
+  scrollView: {
     flex: 1,
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingBottom: 24,
   },
-  topCard: {
-    marginTop: 8,
-    borderRadius: 24,
-    padding: 18,
-    backgroundColor: 'rgba(17, 11, 8, 0.58)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+  scrollContent: {
+    paddingBottom: 16,
   },
-  brandRow: {
+  topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-  },
-  brandCopy: {
-    flex: 1,
-    gap: 4,
-  },
-  eyebrow: {
-    color: '#F3B321',
-    fontSize: 13,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  brandTitle: {
-    color: '#FFFFFF',
-    fontSize: 24,
-    lineHeight: 30,
-    fontWeight: '800',
-  },
-  statsRow: {
-    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     gap: 10,
-    marginTop: 18,
   },
-  statCard: {
+  searchBar: {
     flex: 1,
-    borderRadius: 18,
-    paddingVertical: 14,
-    paddingHorizontal: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  statValue: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  statLabel: {
-    marginTop: 4,
-    color: 'rgba(255, 255, 255, 0.78)',
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '600',
-  },
-  bottomPanel: {
-    borderRadius: 28,
-    padding: 22,
-    backgroundColor: 'rgba(172, 29, 16, 0.88)',
-  },
-  sectionLabel: {
-    color: 'rgba(255, 244, 230, 0.82)',
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  heading: {
-    marginTop: 10,
-    color: '#FFFFFF',
-    fontSize: 32,
-    lineHeight: 36,
-    fontWeight: '800',
-    letterSpacing: -0.8,
-  },
-  highlightRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginTop: 18,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 24,
+    paddingHorizontal: 14,
+    height: 42,
+    gap: 8,
   },
-  highlightIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  searchPlaceholder: {
+    fontSize: 14,
+    color: '#999',
+    flex: 1,
+  },
+  notifButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    borderWidth: 1,
+    borderColor: '#EFEFEF',
   },
-  highlightText: {
-    flex: 1,
-    color: '#FFF4E6',
-    fontSize: 15,
-    lineHeight: 21,
-    fontWeight: '600',
+  horizontalList: {
+    paddingHorizontal: 16,
+    gap: 16,
+  },
+  cuisineItem: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  cuisineIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#F3D8D8',
+  },
+  cuisineLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#8E170C',
+  },
+  brandItem: {
+    alignItems: 'center',
+    gap: 8,
+    width: 68,
+  },
+  brandIcon: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+  },
+  brandLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#444',
+    textAlign: 'center',
+  },
+  exploreTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1A1A1A',
+    paddingHorizontal: 16,
+    marginTop: 24,
+    marginBottom: 12,
+  },
+  filtersContainer: {
+    paddingHorizontal: 16,
+    gap: 8,
+    marginBottom: 16,
+  },
+  filterIconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    paddingHorizontal: 14,
+    gap: 4,
+  },
+  filterChipText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#444',
   },
 });
