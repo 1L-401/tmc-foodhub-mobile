@@ -160,7 +160,7 @@ export default function LoginScreen() {
           {/* Sign Up Link */}
           <Animated.View entering={FadeInUp.delay(300).springify()} style={styles.signupContainer}>
             <Text style={styles.signupText}>Don&apos;t have an account? </Text>
-            <Pressable>
+            <Pressable onPress={() => router.push('/sign-up')}>
               <Text style={styles.signupLinkText}>Sign up</Text>
             </Pressable>
           </Animated.View>
