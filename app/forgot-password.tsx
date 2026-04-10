@@ -22,17 +22,12 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export default function ForgotPasswordScreen() {
   const [email, setEmail] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
 
   const handleEmailChange = (value: string) => {
     setEmail(value);
 
     if (errorMessage) {
       setErrorMessage('');
-    }
-
-    if (successMessage) {
-      setSuccessMessage('');
     }
   };
 
@@ -41,18 +36,16 @@ export default function ForgotPasswordScreen() {
 
     if (!normalizedEmail) {
       setErrorMessage('Email is required.');
-      setSuccessMessage('');
       return;
     }
 
     if (!EMAIL_REGEX.test(normalizedEmail)) {
       setErrorMessage('Please enter a valid email address.');
-      setSuccessMessage('');
       return;
     }
 
     setErrorMessage('');
-    setSuccessMessage('If an account exists for this email, we sent a reset link.');
+    router.push('/verify-code');
   };
 
   return (
@@ -112,8 +105,6 @@ export default function ForgotPasswordScreen() {
             <Pressable style={styles.submitButton} onPress={handleSendResetLink}>
               <Text style={styles.submitButtonText}>Send Reset Link</Text>
             </Pressable>
-
-            {!!successMessage && <Text style={styles.successText}>{successMessage}</Text>}
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -215,11 +206,5 @@ const styles = StyleSheet.create({
     color: '#C53030',
     fontSize: 12,
     marginBottom: 10,
-  },
-  successText: {
-    color: '#1E7A38',
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: 10,
   },
 });
