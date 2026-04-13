@@ -1,6 +1,4 @@
-# TMC FoodHub — Monorepo
-
-A **pnpm + Turborepo** monorepo containing all TMC FoodHub mobile applications.
+# TMC FoodHub Mobile
 
 | App | Package | What it does |
 |-----|---------|-------------|
