@@ -50,6 +50,7 @@ export default function TabLayout() {
         name="cart"
         options={{
           title: 'Cart',
+          tabBarStyle: styles.hiddenTabBar,
           tabBarIcon: ({ color, focused }) => (
             <MaterialCommunityIcons
               name={focused ? 'shopping' : 'shopping-outline'}
@@ -101,5 +102,8 @@ const styles = StyleSheet.create({
   },
   activeIconWrap: {
     // subtle indicator for active home
+  },
+  hiddenTabBar: {
+    display: 'none',
   },
 });
