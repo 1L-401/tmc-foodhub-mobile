@@ -1,6 +1,8 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React from 'react';
 import {
+  Dimensions,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,6 +14,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 
 import { TmcLogo } from '@/components/tmc-logo';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const CARD_GAP = 12;
+const H_PAD = 16;
+const QUICK_ACTION_WIDTH = (SCREEN_WIDTH - H_PAD * 2 - CARD_GAP) / 2;
 
 // ─── Mock Data ───────────────────────────────────────────────────────────────
 
@@ -28,6 +35,9 @@ const REVENUE_DATA = {
     { day: 'Sun', value: 0.7 },
   ],
 };
+
+const Y_LABELS = ['₱500k', '₱400k', '₱300k', '₱200k', '₱100k', '₱0'];
+const BAR_AREA_HEIGHT = 180;
 
 const PLATFORM_ALERTS = [
   {
@@ -117,10 +127,10 @@ const RESTAURANT_APPS = [
 ];
 
 const QUICK_ACTIONS = [
-  { icon: 'store-check-outline' as const, label: 'Review Restaurants', sub: '4 pending approvals' },
-  { icon: 'gavel' as const, label: 'View Disputes', sub: '2 active cases' },
-  { icon: 'package-variant-closed' as const, label: 'Manage Orders', sub: '156 active orders' },
-  { icon: 'cash-multiple' as const, label: 'View Payments', sub: 'Payouts & billing' },
+  { icon: 'store-check-outline' as const, label: 'Review\nRestaurants', sub: '4 pending' },
+  { icon: 'gavel' as const, label: 'View\nDisputes', sub: '2 active' },
+  { icon: 'package-variant-closed' as const, label: 'Manage\nOrders', sub: '156 active' },
+  { icon: 'cash-multiple' as const, label: 'View\nPayments', sub: 'Payouts' },
 ];
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -138,8 +148,12 @@ export default function DashboardScreen() {
         <View style={styles.topBar}>
           <TmcLogo width={44} height={44} />
           <View style={styles.topBarRight}>
-            <MaterialCommunityIcons name="bell-outline" size={24} color="#1A1A1A" />
-            <MaterialCommunityIcons name="menu" size={24} color="#1A1A1A" style={{ marginLeft: 16 }} />
+            <Pressable style={styles.iconButton}>
+              <MaterialCommunityIcons name="bell-outline" size={22} color="#1A1A1A" />
+            </Pressable>
+            <Pressable style={styles.iconButton}>
+              <MaterialCommunityIcons name="menu" size={22} color="#1A1A1A" />
+            </Pressable>
           </View>
         </View>
 
@@ -163,8 +177,7 @@ export default function DashboardScreen() {
         <View style={styles.statCardsRow}>
           <View style={[styles.statCard, { backgroundColor: '#FFF7ED' }]}>
             <View style={styles.statCardHeader}>
-              <MaterialCommunityIcons name="account-group-outline" size={22} color="#EA580C" />
-              <MaterialCommunityIcons name="storefront-outline" size={22} color="#EA580C" />
+              <MaterialCommunityIcons name="storefront-outline" size={20} color="#EA580C" />
             </View>
             <Text style={styles.statCardLabel}>Total Restaurants</Text>
             <Text style={styles.statCardValue}>1,298</Text>
@@ -172,8 +185,7 @@ export default function DashboardScreen() {
           </View>
           <View style={[styles.statCard, { backgroundColor: '#EFF6FF' }]}>
             <View style={styles.statCardHeader}>
-              <MaterialCommunityIcons name="cash-multiple" size={22} color="#2563EB" />
-              <MaterialCommunityIcons name="chart-line" size={22} color="#2563EB" />
+              <MaterialCommunityIcons name="cash-multiple" size={20} color="#2563EB" />
             </View>
             <Text style={styles.statCardLabel}>Platform Revenue</Text>
             <Text style={styles.statCardValue}>₱458k</Text>
@@ -184,10 +196,10 @@ export default function DashboardScreen() {
         {/* ── Revenue Chart ── */}
         <View style={styles.chartCard}>
           <View style={styles.chartHeader}>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={styles.chartTitle}>Platform Revenue</Text>
               <Text style={styles.chartSubtitle}>
-                Net earnings from commissions and fees ({REVENUE_DATA.period})
+                Net earnings from commissions and fees
               </Text>
             </View>
             <View style={styles.chartPeriodBadge}>
@@ -196,33 +208,48 @@ export default function DashboardScreen() {
           </View>
           <Text style={styles.chartAmount}>{REVENUE_DATA.total}</Text>
 
-          {/* Bar Chart */}
-          <View style={styles.chartBars}>
-            {REVENUE_DATA.bars.map((bar) => (
-              <View key={bar.day} style={styles.chartBarCol}>
-                <View style={styles.chartBarTrack}>
-                  <View
-                    style={[
-                      styles.chartBarFill,
-                      {
-                        height: `${bar.value * 100}%`,
-                        backgroundColor: bar.value >= 0.9 ? '#DC2626' : '#F87171',
-                      },
-                    ]}
-                  />
-                </View>
-                <Text style={styles.chartBarLabel}>{bar.day}</Text>
-              </View>
-            ))}
-          </View>
+          {/* Chart Area: Y-labels on the left, bars on the right */}
+          <View style={styles.chartArea}>
+            {/* Y-axis labels */}
+            <View style={styles.chartYColumn}>
+              {Y_LABELS.map((label) => (
+                <Text key={label} style={styles.chartYLabel}>{label}</Text>
+              ))}
+            </View>
 
-          {/* Y-axis labels */}
-          <View style={styles.chartYLabels}>
-            <Text style={styles.chartYLabel}>₱500k</Text>
-            <Text style={styles.chartYLabel}>₱400k</Text>
-            <Text style={styles.chartYLabel}>₱300k</Text>
-            <Text style={styles.chartYLabel}>₱200k</Text>
-            <Text style={styles.chartYLabel}>₱0</Text>
+            {/* Bar chart with grid lines */}
+            <View style={styles.chartBarsArea}>
+              {/* Horizontal grid lines */}
+              {Y_LABELS.map((_, idx) => (
+                <View
+                  key={idx}
+                  style={[
+                    styles.gridLine,
+                    { top: (BAR_AREA_HEIGHT / (Y_LABELS.length - 1)) * idx },
+                  ]}
+                />
+              ))}
+
+              {/* Bars */}
+              <View style={styles.chartBarsRow}>
+                {REVENUE_DATA.bars.map((bar) => (
+                  <View key={bar.day} style={styles.chartBarCol}>
+                    <View style={styles.chartBarTrack}>
+                      <View
+                        style={[
+                          styles.chartBarFill,
+                          {
+                            height: `${bar.value * 100}%`,
+                            backgroundColor: bar.value >= 0.9 ? '#DC2626' : '#F87171',
+                          },
+                        ]}
+                      />
+                    </View>
+                    <Text style={styles.chartBarLabel}>{bar.day}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
           </View>
         </View>
 
@@ -243,10 +270,10 @@ export default function DashboardScreen() {
               </View>
               <View style={styles.alertContent}>
                 <View style={styles.alertTitleRow}>
-                  <Text style={styles.alertTitle}>{alert.title}</Text>
+                  <Text style={styles.alertTitle} numberOfLines={1}>{alert.title}</Text>
                   {alert.time ? <Text style={styles.alertTime}>{alert.time}</Text> : null}
                 </View>
-                <Text style={styles.alertDescription}>{alert.description}</Text>
+                <Text style={styles.alertDescription} numberOfLines={2}>{alert.description}</Text>
                 <View style={[styles.alertBadge, { backgroundColor: alert.badgeBg }]}>
                   <Text style={[styles.alertBadgeText, { color: alert.badgeColor }]}>{alert.badge}</Text>
                 </View>
@@ -256,10 +283,10 @@ export default function DashboardScreen() {
         ))}
 
         {/* ── Recent Restaurant Applications ── */}
-        <View style={[styles.sectionHeader, { marginTop: 28 }]}>
-          <Text style={styles.sectionTitle}>Recent Restaurant Applications</Text>
+        <View style={[styles.sectionHeader, { marginTop: 24 }]}>
+          <Text style={styles.sectionTitle}>Recent Applications</Text>
           <Pressable>
-            <Text style={styles.viewAllText}>View all restaurants</Text>
+            <Text style={styles.viewAllText}>View all</Text>
           </Pressable>
         </View>
         <Text style={styles.sectionSubtitle}>Partners awaiting onboarding review</Text>
@@ -267,24 +294,24 @@ export default function DashboardScreen() {
         {RESTAURANT_APPS.map((app, i) => (
           <View key={i} style={styles.appCard}>
             <View style={[styles.appIconWrap, { backgroundColor: app.iconBg }]}>
-              <MaterialCommunityIcons name={app.icon} size={24} color={app.iconColor} />
+              <MaterialCommunityIcons name={app.icon} size={22} color={app.iconColor} />
             </View>
             <View style={styles.appContent}>
               <View style={styles.appTitleRow}>
-                <Text style={styles.appName}>{app.name}</Text>
+                <Text style={styles.appName} numberOfLines={1}>{app.name}</Text>
                 <View style={[styles.appStatusBadge, { backgroundColor: app.statusBg }]}>
                   <Text style={[styles.appStatusText, { color: app.statusColor }]}>{app.status}</Text>
                 </View>
               </View>
-              <Text style={styles.appType}>{app.type}</Text>
-              <Text style={styles.appLocation}>{app.location}</Text>
+              <Text style={styles.appType} numberOfLines={1}>{app.type}</Text>
+              <Text style={styles.appLocation} numberOfLines={1}>{app.location}</Text>
               <Text style={styles.appTime}>{app.time}</Text>
             </View>
           </View>
         ))}
 
         {/* ── Quick Actions ── */}
-        <View style={[styles.sectionHeader, { marginTop: 28 }]}>
+        <View style={[styles.sectionHeader, { marginTop: 24 }]}>
           <Text style={styles.sectionTitle}>Quick Actions</Text>
         </View>
         <Text style={styles.sectionSubtitle}>Common admin tasks</Text>
@@ -292,7 +319,9 @@ export default function DashboardScreen() {
         <View style={styles.quickActionsGrid}>
           {QUICK_ACTIONS.map((action, i) => (
             <Pressable key={i} style={styles.quickActionCard}>
-              <MaterialCommunityIcons name={action.icon} size={24} color="#AC1D10" />
+              <View style={styles.quickActionIconWrap}>
+                <MaterialCommunityIcons name={action.icon} size={22} color="#AC1D10" />
+              </View>
               <Text style={styles.quickActionLabel}>{action.label}</Text>
               <Text style={styles.quickActionSub}>{action.sub}</Text>
             </Pressable>
@@ -300,16 +329,17 @@ export default function DashboardScreen() {
         </View>
 
         {/* ── Order Trend ── */}
-        <View style={[styles.sectionHeader, { marginTop: 28 }]}>
+        <View style={[styles.sectionHeader, { marginTop: 24 }]}>
           <Text style={styles.sectionTitle}>Order Trend</Text>
         </View>
-        <Text style={styles.sectionSubtitle}>Hourly - today</Text>
+        <Text style={styles.sectionSubtitle}>Hourly — today</Text>
         <View style={styles.trendPlaceholder}>
-          <MaterialCommunityIcons name="chart-areaspline" size={48} color="#E5E5E5" />
+          <MaterialCommunityIcons name="chart-areaspline" size={40} color="#E0E0E0" />
           <Text style={styles.trendPlaceholderText}>Chart loading...</Text>
         </View>
 
-        <View style={{ height: 32 }} />
+        {/* Bottom spacer for floating tab bar */}
+        <View style={{ height: Platform.OS === 'ios' ? 100 : 96 }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -326,8 +356,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 24,
+    paddingHorizontal: H_PAD,
   },
 
   // ── Top Bar
@@ -335,22 +364,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
+    paddingVertical: 10,
   },
   topBarRight: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F5F5F5',
   },
 
   // ── Search
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F3F3F3',
-    borderRadius: 12,
+    backgroundColor: '#F0F0F0',
+    borderRadius: 14,
     paddingHorizontal: 14,
     height: 44,
-    marginBottom: 20,
+    marginBottom: 18,
   },
   searchInput: {
     flex: 1,
@@ -361,16 +399,16 @@ const styles = StyleSheet.create({
 
   // ── Welcome
   welcomeSection: {
-    marginBottom: 20,
+    marginBottom: 18,
   },
   welcomeTitle: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '800',
     color: '#1A1A1A',
     letterSpacing: -0.5,
   },
   welcomeSubtitle: {
-    fontSize: 15,
+    fontSize: 14,
     color: '#888888',
     marginTop: 2,
   },
@@ -378,18 +416,16 @@ const styles = StyleSheet.create({
   // ── Stat Cards
   statCardsRow: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
+    gap: CARD_GAP,
+    marginBottom: 18,
   },
   statCard: {
     flex: 1,
     borderRadius: 16,
-    padding: 16,
+    padding: 14,
   },
   statCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   statCardLabel: {
     fontSize: 12,
@@ -397,11 +433,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   statCardValue: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '800',
     color: '#1A1A1A',
     marginTop: 4,
-    letterSpacing: -1,
+    letterSpacing: -0.8,
   },
   statCardChange: {
     fontSize: 11,
@@ -414,8 +450,8 @@ const styles = StyleSheet.create({
   chartCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 20,
-    marginBottom: 24,
+    padding: 16,
+    marginBottom: 22,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
@@ -426,76 +462,95 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    gap: 8,
   },
   chartTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: '#1A1A1A',
   },
   chartSubtitle: {
-    fontSize: 12,
-    color: '#888888',
-    marginTop: 4,
-    maxWidth: 200,
+    fontSize: 11,
+    color: '#999',
+    marginTop: 2,
   },
   chartPeriodBadge: {
     backgroundColor: '#F3F3F3',
     borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    flexShrink: 0,
   },
   chartPeriodText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: '#666666',
   },
   chartAmount: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '800',
     color: '#1A1A1A',
-    marginTop: 12,
-    marginBottom: 16,
-    letterSpacing: -1,
+    marginTop: 10,
+    marginBottom: 12,
+    letterSpacing: -0.8,
   },
-  chartBars: {
+
+  // Chart area with Y-labels + bars side by side
+  chartArea: {
     flexDirection: 'row',
+    marginTop: 4,
+  },
+  chartYColumn: {
+    width: 44,
+    height: BAR_AREA_HEIGHT,
     justifyContent: 'space-between',
+    paddingRight: 6,
+    paddingTop: 2,
+  },
+  chartYLabel: {
+    fontSize: 10,
+    color: '#CCCCCC',
+    textAlign: 'right',
+  },
+  chartBarsArea: {
+    flex: 1,
+    height: BAR_AREA_HEIGHT,
+    position: 'relative',
+  },
+  gridLine: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: '#F5F5F5',
+  },
+  chartBarsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
     alignItems: 'flex-end',
-    height: 120,
-    marginTop: 8,
+    height: BAR_AREA_HEIGHT,
+    paddingBottom: 20,
   },
   chartBarCol: {
-    flex: 1,
     alignItems: 'center',
     gap: 6,
   },
   chartBarTrack: {
-    width: 24,
-    height: 100,
+    width: 28,
+    height: BAR_AREA_HEIGHT - 28,
     backgroundColor: '#F5F5F5',
-    borderRadius: 6,
+    borderRadius: 5,
     justifyContent: 'flex-end',
     overflow: 'hidden',
   },
   chartBarFill: {
     width: '100%',
-    borderRadius: 6,
+    borderRadius: 5,
   },
   chartBarLabel: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#999999',
     fontWeight: '500',
-  },
-  chartYLabels: {
-    position: 'absolute',
-    left: 20,
-    top: 108,
-    height: 100,
-    justifyContent: 'space-between',
-  },
-  chartYLabel: {
-    fontSize: 10,
-    color: '#CCCCCC',
   },
 
   // ── Sections
@@ -506,14 +561,14 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
     color: '#1A1A1A',
   },
   sectionSubtitle: {
-    fontSize: 13,
-    color: '#888888',
-    marginBottom: 14,
+    fontSize: 12,
+    color: '#999',
+    marginBottom: 12,
   },
   viewAllText: {
     fontSize: 13,
@@ -525,8 +580,8 @@ const styles = StyleSheet.create({
   alertCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
-    padding: 16,
-    marginBottom: 12,
+    padding: 14,
+    marginBottom: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.03,
@@ -538,46 +593,49 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   alertIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   alertContent: {
     flex: 1,
+    minWidth: 0,
   },
   alertTitleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 8,
   },
   alertTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     color: '#1A1A1A',
     flex: 1,
   },
   alertTime: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#BBBBBB',
-    marginLeft: 8,
+    flexShrink: 0,
   },
   alertDescription: {
-    fontSize: 13,
-    color: '#777777',
-    marginTop: 4,
-    lineHeight: 18,
+    fontSize: 12,
+    color: '#888',
+    marginTop: 3,
+    lineHeight: 17,
   },
   alertBadge: {
     alignSelf: 'flex-start',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    marginTop: 8,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginTop: 6,
   },
   alertBadgeText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
   },
 
@@ -585,8 +643,8 @@ const styles = StyleSheet.create({
   appCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
-    padding: 16,
-    marginBottom: 12,
+    padding: 14,
+    marginBottom: 10,
     flexDirection: 'row',
     gap: 12,
     shadowColor: '#000',
@@ -596,72 +654,86 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   appIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   appContent: {
     flex: 1,
+    minWidth: 0,
   },
   appTitleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 8,
   },
   appName: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
     color: '#1A1A1A',
+    flex: 1,
   },
   appStatusBadge: {
-    borderRadius: 8,
-    paddingHorizontal: 10,
+    borderRadius: 6,
+    paddingHorizontal: 8,
     paddingVertical: 3,
+    flexShrink: 0,
   },
   appStatusText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
   },
   appType: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#777777',
     marginTop: 2,
   },
   appLocation: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#AAAAAA',
     marginTop: 1,
   },
   appTime: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#CCCCCC',
-    marginTop: 4,
+    marginTop: 3,
   },
 
   // ── Quick Actions
   quickActionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: CARD_GAP,
   },
   quickActionCard: {
-    width: '47%',
+    width: QUICK_ACTION_WIDTH,
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
-    padding: 16,
+    padding: 14,
     borderWidth: 1,
     borderColor: '#F0F0F0',
   },
+  quickActionIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#FEF2F2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   quickActionLabel: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     color: '#1A1A1A',
     marginTop: 10,
+    lineHeight: 17,
   },
   quickActionSub: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#AAAAAA',
     marginTop: 2,
   },
@@ -670,15 +742,15 @@ const styles = StyleSheet.create({
   trendPlaceholder: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
-    padding: 40,
+    padding: 32,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#F0F0F0',
   },
   trendPlaceholderText: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#CCCCCC',
-    marginTop: 8,
+    marginTop: 6,
   },
 });
