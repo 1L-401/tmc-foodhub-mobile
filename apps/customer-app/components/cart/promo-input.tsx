@@ -11,7 +11,11 @@ export function PromoInput({ value, onChangeText, onApply }: PromoInputProps) {
   return (
     <View style={styles.container}>
       <View style={styles.inputWrap}>
-        <MaterialCommunityIcons name="ticket-percent-outline" size={17} color="#C98C6F" />
+        <MaterialCommunityIcons
+          name="ticket-percent-outline"
+          size={16}
+          color="#C98C6F"
+        />
         <TextInput
           style={styles.input}
           placeholder="Promo Code"
@@ -22,7 +26,12 @@ export function PromoInput({ value, onChangeText, onApply }: PromoInputProps) {
         />
       </View>
 
-      <Pressable style={({ pressed }) => [styles.applyButton, pressed && styles.pressed]} onPress={onApply}>
+      <Pressable
+        style={({ pressed }) => [
+          styles.applyButton,
+          pressed && styles.pressed,
+        ]}
+        onPress={onApply}>
         <Text style={styles.applyText}>Apply</Text>
       </Pressable>
     </View>
@@ -31,15 +40,15 @@ export function PromoInput({ value, onChangeText, onApply }: PromoInputProps) {
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: 14,
+    marginTop: 12,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
   },
   inputWrap: {
     flex: 1,
-    height: 44,
-    borderRadius: 11,
+    height: 42,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E3E3E3',
     backgroundColor: '#FFFFFF',
@@ -50,13 +59,13 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 14,
     color: '#1A1A1A',
     paddingVertical: 0,
   },
   applyButton: {
-    height: 44,
-    borderRadius: 11,
+    height: 42,
+    borderRadius: 12,
     paddingHorizontal: 20,
     backgroundColor: '#AC1D10',
     alignItems: 'center',
@@ -64,7 +73,7 @@ const styles = StyleSheet.create({
   },
   applyText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
   },
   pressed: {

@@ -1,9 +1,35 @@
-import type { AddOnItem, CartItemModel } from '@/components/cart/types';
+import type { AddOnItem, CartItemModel, SavedAddress } from '@/components/cart/types';
 
-export const DEFAULT_DELIVERY_ADDRESS = {
-  label: 'Delivering to',
-  address: 'Home • 123 Quezon Avenue',
-} as const;
+export const DEFAULT_DELIVERY_ADDRESS: SavedAddress = {
+  id: 'addr-1',
+  label: 'Home',
+  street: '123 Quezon Avenue, Unit 4B, Brgy. South Triangle',
+  fullAddress: '123 Quezon Avenue, Unit 4B, Brgy. South Triangle, Quezon City, Metro Manila',
+  isDefault: true,
+  unitFloor: '4B',
+  city: 'Quezon City',
+};
+
+export const SAVED_ADDRESSES: SavedAddress[] = [
+  {
+    id: 'addr-1',
+    label: 'Home',
+    street: '123 Quezon Avenue, Unit 4B, Brgy. South Triangle',
+    fullAddress: '123 Quezon Avenue, Unit 4B, Brgy. South Triangle, Quezon City, Metro Manila',
+    isDefault: true,
+    unitFloor: '4B',
+    city: 'Quezon City',
+  },
+  {
+    id: 'addr-2',
+    label: 'Work',
+    street: 'Salesforce Tower, 415 Mission St, Floor 22',
+    fullAddress: 'Salesforce Tower, 415 Mission St, Floor 22, San Francisco, CA 94105',
+    isDefault: false,
+    unitFloor: 'Floor 22',
+    city: 'San Francisco',
+  },
+];
 
 export const DEFAULT_PAYMENT_METHOD = 'GCash •••• 9876';
 export const DEFAULT_DELIVERY_FEE = 3;
