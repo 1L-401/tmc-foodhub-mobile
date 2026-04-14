@@ -129,32 +129,37 @@ function ActionButton({ status }: { status: OrderStatus }) {
 /* ─── Order Card ─── */
 function OrderCard({ order, index }: { order: Order; index: number }) {
   return (
-    <Animated.View
-      entering={FadeInRight.delay(200 + index * 80).duration(400)}
-      style={styles.orderCard}>
-      {/* Top row: order number + badge */}
-      <View style={styles.orderTop}>
-        <Text style={styles.orderNumber}>{order.orderNumber}</Text>
-        <StatusBadge status={order.status} />
-      </View>
+    <Pressable
+      onPress={() =>
+        router.push({ pathname: '/order-details', params: { id: order.id } })
+      }>
+      <Animated.View
+        entering={FadeInRight.delay(200 + index * 80).duration(400)}
+        style={styles.orderCard}>
+        {/* Top row: order number + badge */}
+        <View style={styles.orderTop}>
+          <Text style={styles.orderNumber}>{order.orderNumber}</Text>
+          <StatusBadge status={order.status} />
+        </View>
 
-      {/* Customer */}
-      <Text style={styles.orderCustomer}>{order.customerName}</Text>
+        {/* Customer */}
+        <Text style={styles.orderCustomer}>{order.customerName}</Text>
 
-      {/* Items */}
-      <Text style={styles.orderItems}>{order.items}</Text>
+        {/* Items */}
+        <Text style={styles.orderItems}>{order.items}</Text>
 
-      {/* Price */}
-      <Text style={styles.orderTotal}>${order.total.toFixed(2)}</Text>
+        {/* Price */}
+        <Text style={styles.orderTotal}>${order.total.toFixed(2)}</Text>
 
-      {/* Bottom row: meta + action */}
-      <View style={styles.orderBottom}>
-        <Text style={styles.orderMeta}>
-          {order.paymentMethod} • {order.timeAgo}
-        </Text>
-        <ActionButton status={order.status} />
-      </View>
-    </Animated.View>
+        {/* Bottom row: meta + action */}
+        <View style={styles.orderBottom}>
+          <Text style={styles.orderMeta}>
+            {order.paymentMethod} • {order.timeAgo}
+          </Text>
+          <ActionButton status={order.status} />
+        </View>
+      </Animated.View>
+    </Pressable>
   );
 }
 

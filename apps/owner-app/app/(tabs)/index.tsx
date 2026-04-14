@@ -245,7 +245,13 @@ export default function DashboardScreen() {
               <AnimatedPressable
                 key={order.id}
                 entering={FadeInRight.delay(500 + i * 100).duration(400)}
-                style={styles.orderCard}>
+                style={styles.orderCard}
+                onPress={() =>
+                  router.push({
+                    pathname: '/order-details',
+                    params: { id: order.id },
+                  })
+                }>
                 <View style={styles.orderTop}>
                   <Text style={styles.orderNumber}>{order.orderNumber}</Text>
                   <StatusBadge status={order.status} />
