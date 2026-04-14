@@ -122,7 +122,11 @@ export default function MoreScreen() {
             <SectionHeader title="Operations" />
             <MenuItem icon="view-dashboard-outline" label="Dashboard" />
             <MenuItem icon="clipboard-text-outline" label="Orders" />
-            <MenuItem icon="package-variant-closed" label="Inventory" />
+            <MenuItem
+              icon="package-variant-closed"
+              label="Inventory"
+              onPress={() => router.push('/inventory')}
+            />
           </Animated.View>
 
           <View style={styles.divider} />
