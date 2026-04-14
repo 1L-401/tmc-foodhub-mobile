@@ -13,3 +13,16 @@ export interface AddOnItem {
   price: number;
   image: string;
 }
+
+export type AddressLabel = 'Home' | 'Work' | 'Other';
+
+export interface SavedAddress {
+  id: string;
+  label: AddressLabel;
+  street: string;
+  fullAddress: string;
+  isDefault: boolean;
+  unitFloor?: string;
+  city?: string;
+  deliveryNotes?: string;
+}

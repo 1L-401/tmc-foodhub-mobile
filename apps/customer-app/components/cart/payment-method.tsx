@@ -26,7 +26,6 @@ export function PaymentMethod({ method, onChange }: PaymentMethodProps) {
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: 16,
     borderRadius: 14,
     backgroundColor: '#EFEFEF',
     paddingHorizontal: 12,
@@ -51,7 +50,7 @@ const styles = StyleSheet.create({
     borderColor: '#E3E3E3',
   },
   methodText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     color: '#1A1A1A',
   },
@@ -60,7 +59,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   changeText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
     color: '#AC1D10',
   },

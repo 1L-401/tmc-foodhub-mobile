@@ -91,13 +91,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   name: {
-    fontSize: 22,
+    fontSize: 15,
     fontWeight: '700',
     color: '#1A1A1A',
     marginBottom: 2,
   },
   description: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#8A8A8A',
     marginBottom: 4,
   },
@@ -107,9 +107,9 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
   },
   price: {
-    fontSize: 22,
+    fontSize: 15,
     fontWeight: '700',
-    color: '#AC1D10',
+    color: '#1A1A1A',
   },
   controlsRow: {
     marginTop: 8,

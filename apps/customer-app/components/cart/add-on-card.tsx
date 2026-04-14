@@ -53,13 +53,13 @@ const styles = StyleSheet.create({
     resizeMode: 'cover',
   },
   name: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '600',
     color: '#1A1A1A',
   },
   price: {
     marginTop: 2,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     color: '#AC1D10',
     marginBottom: 8,

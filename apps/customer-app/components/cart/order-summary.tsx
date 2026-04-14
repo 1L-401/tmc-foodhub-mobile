@@ -10,7 +10,11 @@ function formatPrice(value: number) {
   return `$${value.toFixed(2)}`;
 }
 
-export function OrderSummary({ subtotal, deliveryFee, discount }: OrderSummaryProps) {
+export function OrderSummary({
+  subtotal,
+  deliveryFee,
+  discount,
+}: OrderSummaryProps) {
   return (
     <View style={styles.container}>
       <View style={styles.row}>
@@ -33,8 +37,8 @@ export function OrderSummary({ subtotal, deliveryFee, discount }: OrderSummaryPr
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: 12,
-    gap: 8,
+    marginTop: 14,
+    gap: 6,
   },
   row: {
     flexDirection: 'row',
@@ -42,20 +46,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   label: {
-    fontSize: 15,
+    fontSize: 14,
     color: '#777777',
   },
   value: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: '700',
-    color: '#4A4A4A',
+    color: '#1A1A1A',
   },
   discountLabel: {
-    fontSize: 15,
+    fontSize: 14,
     color: '#AC1D10',
   },
   discountValue: {
-    fontSize: 20,
+    fontSize: 14,
     fontWeight: '700',
     color: '#AC1D10',
   },
