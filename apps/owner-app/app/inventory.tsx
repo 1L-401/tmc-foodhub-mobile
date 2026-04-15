@@ -3,17 +3,17 @@ import { router } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import {
   Image,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   View,
 } from 'react-native';
 import Animated, { FadeInDown, FadeInRight } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { CustomToggle } from '@/components/custom-toggle';
 
 /* ─── Types ─── */
 type StockStatus = 'available' | 'low_stock' | 'out_of_stock';
@@ -265,13 +265,10 @@ function InventoryCard({
       {/* Bottom: toggle + actions */}
       <View style={cardStyles.bottomRow}>
         <View style={cardStyles.toggleWrap}>
-          <Switch
+          <CustomToggle
             value={item.available}
             onValueChange={() => onToggle(item.id)}
-            trackColor={{ false: '#E5E5E5', true: '#FCDCD8' }}
-            thumbColor={item.available ? '#AC1D10' : '#CCC'}
-            ios_backgroundColor="#E5E5E5"
-            style={Platform.OS === 'ios' ? { transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] } : undefined}
+            size="small"
           />
         </View>
 

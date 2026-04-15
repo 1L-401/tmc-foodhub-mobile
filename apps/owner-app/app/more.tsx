@@ -6,12 +6,13 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   View,
 } from 'react-native';
 import Animated, { FadeInDown, FadeInLeft } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { CustomToggle } from '@/components/custom-toggle';
 
 const PROFILE = {
   name: 'Juan Dela Cruz',
@@ -105,11 +106,9 @@ export default function MoreScreen() {
               icon="weather-night"
               label="Dark Mode"
               rightElement={
-                <Switch
+                <CustomToggle
                   value={darkMode}
                   onValueChange={setDarkMode}
-                  trackColor={{ false: '#E5E5E5', true: '#FCDCD8' }}
-                  thumbColor={darkMode ? '#AC1D10' : '#FFFFFF'}
                 />
               }
             />
@@ -135,8 +134,8 @@ export default function MoreScreen() {
           <Animated.View entering={FadeInDown.delay(400).duration(400)}>
             <SectionHeader title="Menu" />
             <MenuItem icon="silverware-fork-knife" label="Menu" />
-            <MenuItem icon="view-grid-outline" label="Categories" />
-            <MenuItem icon="tag-outline" label="Promotions" />
+            <MenuItem icon="view-grid-outline" label="Categories" onPress={() => router.push('/categories')} />
+            <MenuItem icon="tag-outline" label="Promotions" onPress={() => router.push('/promotions')} />
           </Animated.View>
 
           <View style={styles.divider} />
@@ -144,7 +143,7 @@ export default function MoreScreen() {
           {/* Engagement */}
           <Animated.View entering={FadeInDown.delay(500).duration(400)}>
             <SectionHeader title="Engagement" />
-            <MenuItem icon="star-outline" label="Reviews" />
+            <MenuItem icon="star-outline" label="Reviews" onPress={() => router.push('/reviews')} />
           </Animated.View>
 
           <View style={styles.divider} />
