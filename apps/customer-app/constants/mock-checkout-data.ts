@@ -36,6 +36,18 @@ export const CHECKOUT_PAYMENT_OPTIONS: CheckoutPaymentOption[] = [
     icon: 'gcash',
   },
   {
+    id: 'maya',
+    label: 'Maya',
+    subtitle: 'john.doe@maya',
+    icon: 'maya',
+  },
+  {
+    id: 'card',
+    label: 'Credit or Debit Card',
+    subtitle: 'Add a card to continue',
+    icon: 'card',
+  },
+  {
     id: 'cod',
     label: 'Cash on Delivery',
     subtitle: 'Pay when food arrives',
