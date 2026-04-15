@@ -13,14 +13,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import GCashIcon from '@/assets/images/GCash_idOP67IR4D_0.svg';
-import type { CheckoutPaymentOption } from '@/components/checkout/types';
+import { PaymentOptionRow, type CheckoutPaymentId } from '@/components/checkout';
+import { usePayment } from '@/components/payment';
 import {
   CHECKOUT_DELIVERY_ADDRESS,
   CHECKOUT_DELIVERY_FEE,
   CHECKOUT_DISCOUNT,
   CHECKOUT_ITEMS,
-  CHECKOUT_PAYMENT_OPTIONS,
   CHECKOUT_SPECIAL_INSTRUCTIONS_PLACEHOLDER,
   CHECKOUT_SUBTOTAL,
   CHECKOUT_TOTAL,
@@ -32,17 +31,19 @@ function formatPrice(value: number) {
 
 export default function CheckoutScreen() {
   const [specialInstructions, setSpecialInstructions] = useState('');
-  const [selectedPaymentId, setSelectedPaymentId] = useState<string>(
-    CHECKOUT_PAYMENT_OPTIONS[0]?.id ?? 'gcash'
-  );
+  const {
+    checkoutPaymentOptions,
+    selectedPaymentId,
+    selectPaymentForOrder,
+  } = usePayment();
 
   const itemCount = useMemo(
     () => CHECKOUT_ITEMS.reduce((total, item) => total + item.quantity, 0),
     []
   );
 
-  const handleSelectPayment = (option: CheckoutPaymentOption) => {
-    setSelectedPaymentId(option.id);
+  const handleSelectPayment = (methodId: CheckoutPaymentId) => {
+    selectPaymentForOrder(methodId);
   };
 
   return (
@@ -171,48 +172,14 @@ export default function CheckoutScreen() {
           {/* ── Payment method ── */}
           <Text style={styles.paymentTitle}>Payment method</Text>
 
-          {CHECKOUT_PAYMENT_OPTIONS.map((option) => {
-            const isSelected = selectedPaymentId === option.id;
-            const icon =
-              option.icon === 'gcash' ? (
-                <GCashIcon width={20} height={20} />
-              ) : (
-                <MaterialCommunityIcons
-                  name="cash-multiple"
-                  size={20}
-                  color="#8A8A8A"
-                />
-              );
-
-            return (
-              <Pressable
-                key={option.id}
-                style={[
-                  styles.paymentCard,
-                  isSelected && styles.paymentCardSelected,
-                ]}
-                onPress={() => handleSelectPayment(option)}>
-                <View style={styles.paymentLeft}>
-                  <View style={styles.paymentIconWrap}>{icon}</View>
-                  <View>
-                    <Text style={styles.paymentLabel}>
-                      {option.label}
-                    </Text>
-                    <Text style={styles.paymentSub}>
-                      {option.subtitle}
-                    </Text>
-                  </View>
-                </View>
-                <View
-                  style={[
-                    styles.radio,
-                    isSelected && styles.radioSelected,
-                  ]}>
-                  {isSelected && <View style={styles.radioDot} />}
-                </View>
-              </Pressable>
-            );
-          })}
+          {checkoutPaymentOptions.map((option) => (
+            <PaymentOptionRow
+              key={option.id}
+              option={option}
+              selected={selectedPaymentId === option.id}
+              onPress={() => handleSelectPayment(option.id)}
+            />
+          ))}
 
           {/* ── Totals ── */}
           <View style={styles.totals}>
@@ -497,67 +464,6 @@ const styles = StyleSheet.create({
     marginTop: 18,
     marginBottom: 10,
   },
-  paymentCard: {
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: '#E5E5E5',
-    backgroundColor: '#F8F8F8',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  paymentCardSelected: {
-    borderColor: '#AC1D10',
-    backgroundColor: '#FFF8F7',
-  },
-  paymentLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1,
-  },
-  paymentIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E8E8E8',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  paymentLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 1,
-  },
-  paymentSub: {
-    fontSize: 12,
-    color: '#999',
-  },
-  radio: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#D0D0D0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  radioSelected: {
-    borderColor: '#AC1D10',
-  },
-  radioDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#AC1D10',
-  },
-
   /* ── Totals ── */
   totals: {
     marginTop: 16,

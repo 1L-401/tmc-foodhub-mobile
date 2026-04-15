@@ -14,6 +14,12 @@ export function PaymentOptionRow({ option, selected, onPress }: PaymentOptionRow
   const icon =
     option.icon === 'gcash' ? (
       <GCashIcon width={20} height={20} />
+    ) : option.icon === 'maya' ? (
+      <View style={styles.mayaBadge}>
+        <Text style={styles.mayaBadgeText}>M</Text>
+      </View>
+    ) : option.icon === 'card' ? (
+      <MaterialCommunityIcons name="credit-card-outline" size={20} color="#8A8A8A" />
     ) : (
       <MaterialCommunityIcons name="cash-multiple" size={20} color="#8A8A8A" />
     );
@@ -79,7 +85,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   label: {
-    fontSize: 21,
+    fontSize: 14,
     fontWeight: '700',
     color: '#1A1A1A',
     marginBottom: 1,
@@ -106,6 +112,20 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: '#AC1D10',
+  },
+  mayaBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 5,
+    backgroundColor: '#111111',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mayaBadgeText: {
+    fontSize: 10,
+    color: '#7FFF6A',
+    fontWeight: '800',
+    lineHeight: 12,
   },
   pressed: {
     opacity: 0.82,

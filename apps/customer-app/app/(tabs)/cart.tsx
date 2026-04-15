@@ -25,10 +25,10 @@ import {
   DEFAULT_DELIVERY_ADDRESS,
   DEFAULT_DELIVERY_FEE,
   DEFAULT_DISCOUNT,
-  DEFAULT_PAYMENT_METHOD,
   MOCK_ADD_ONS,
   MOCK_CART_ITEMS,
 } from '@/constants/mock-cart-data';
+import { usePayment } from '@/components/payment';
 
 export default function CartScreen() {
   const params = useLocalSearchParams<{
@@ -40,6 +40,7 @@ export default function CartScreen() {
 
   const [cartItems, setCartItems] = useState<CartItemModel[]>(MOCK_CART_ITEMS);
   const [promoCode, setPromoCode] = useState('');
+  const { preferredPayment } = usePayment();
 
   // Use address from navigation params if available, otherwise use default
   const currentAddress = useMemo(() => {
@@ -99,6 +100,10 @@ export default function CartScreen() {
       pathname: '/delivery-address',
       params: { selectedId: currentAddress.id },
     });
+  };
+
+  const handleChangePaymentMethod = () => {
+    router.push('/add-payment-method');
   };
 
   return (
@@ -185,8 +190,10 @@ export default function CartScreen() {
         {/* ── Bottom Sheet ── */}
         <View style={styles.bottomSheet}>
           <PaymentMethod
-            method={DEFAULT_PAYMENT_METHOD}
-            onChange={() => {}}
+            icon={preferredPayment.icon}
+            label={preferredPayment.label}
+            subtitle={preferredPayment.subtitle}
+            onChange={handleChangePaymentMethod}
           />
 
           <PromoInput
