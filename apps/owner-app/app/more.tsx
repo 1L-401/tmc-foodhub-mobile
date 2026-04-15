@@ -135,7 +135,7 @@ export default function MoreScreen() {
             <SectionHeader title="Menu" />
             <MenuItem icon="silverware-fork-knife" label="Menu" />
             <MenuItem icon="view-grid-outline" label="Categories" onPress={() => router.push('/categories')} />
-            <MenuItem icon="tag-outline" label="Promotions" />
+            <MenuItem icon="tag-outline" label="Promotions" onPress={() => router.push('/promotions')} />
           </Animated.View>
 
           <View style={styles.divider} />
