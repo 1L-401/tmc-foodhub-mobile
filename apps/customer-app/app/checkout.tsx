@@ -215,7 +215,7 @@ export default function CheckoutScreen() {
               styles.placeOrderBtn,
               pressed && styles.placeOrderPressed,
             ]}
-            onPress={() => {}}>
+            onPress={() => router.push('/order-processing')}>
             <Text style={styles.placeOrderText}>Place Order</Text>
             <MaterialCommunityIcons
               name="chevron-right"
