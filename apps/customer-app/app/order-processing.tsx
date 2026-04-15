@@ -1,5 +1,5 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -10,6 +10,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { useCart } from '@/components/cart';
 
 type ProcessingStage = 'contacting-kitchen' | 'kitchen-confirmed' | 'preparing';
 
@@ -50,10 +52,21 @@ const STAGE_STATES: Record<ProcessingStage, StageState> = {
 };
 
 export default function OrderProcessingScreen() {
+  const params = useLocalSearchParams<{ orderId?: string }>();
+  const { activeOrder, clearActiveOrder } = useCart();
   const [stage, setStage] = useState<ProcessingStage>('contacting-kitchen');
   const progressAnim = useRef(new Animated.Value(STAGE_STATES['contacting-kitchen'].progress)).current;
-  const timeoutRefOne = useRef<NodeJS.Timeout | null>(null);
-  const timeoutRefTwo = useRef<NodeJS.Timeout | null>(null);
+  const timeoutRefOne = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timeoutRefTwo = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const completionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const resolvedOrderId = params.orderId ?? activeOrder?.id ?? '';
+
+  useEffect(() => {
+    if (!resolvedOrderId) {
+      router.replace('/(tabs)/cart');
+    }
+  }, [resolvedOrderId]);
 
   useEffect(() => {
     timeoutRefOne.current = setTimeout(() => {
@@ -72,8 +85,31 @@ export default function OrderProcessingScreen() {
       if (timeoutRefTwo.current) {
         clearTimeout(timeoutRefTwo.current);
       }
+
+      if (completionTimeoutRef.current) {
+        clearTimeout(completionTimeoutRef.current);
+      }
     };
   }, []);
+
+  useEffect(() => {
+    if (stage !== 'preparing' || !resolvedOrderId) {
+      return;
+    }
+
+    completionTimeoutRef.current = setTimeout(() => {
+      router.replace({
+        pathname: '/order-tracking/[id]',
+        params: { id: resolvedOrderId },
+      });
+    }, 1100);
+
+    return () => {
+      if (completionTimeoutRef.current) {
+        clearTimeout(completionTimeoutRef.current);
+      }
+    };
+  }, [resolvedOrderId, stage]);
 
   useEffect(() => {
     Animated.timing(progressAnim, {
@@ -102,6 +138,10 @@ export default function OrderProcessingScreen() {
     if (timeoutRefTwo.current) {
       clearTimeout(timeoutRefTwo.current);
     }
+
+    if (completionTimeoutRef.current) {
+      clearTimeout(completionTimeoutRef.current);
+    }
   };
 
   const handleCancelOrder = () => {
@@ -115,11 +155,16 @@ export default function OrderProcessingScreen() {
         style: 'destructive',
         onPress: () => {
           clearTimers();
+          clearActiveOrder();
           router.replace('/(tabs)/cart');
         },
       },
     ]);
   };
+
+  if (!resolvedOrderId) {
+    return null;
+  }
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>

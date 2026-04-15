@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useMemo, useState } from 'react';
+import React from 'react';
 import {
   Image,
   Pressable,
@@ -13,16 +13,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useCart } from '@/components/cart';
 import { PaymentOptionRow, type CheckoutPaymentId } from '@/components/checkout';
 import { usePayment } from '@/components/payment';
 import {
-  CHECKOUT_DELIVERY_ADDRESS,
-  CHECKOUT_DELIVERY_FEE,
-  CHECKOUT_DISCOUNT,
-  CHECKOUT_ITEMS,
   CHECKOUT_SPECIAL_INSTRUCTIONS_PLACEHOLDER,
-  CHECKOUT_SUBTOTAL,
-  CHECKOUT_TOTAL,
 } from '@/constants/mock-checkout-data';
 
 function formatPrice(value: number) {
@@ -30,20 +25,40 @@ function formatPrice(value: number) {
 }
 
 export default function CheckoutScreen() {
-  const [specialInstructions, setSpecialInstructions] = useState('');
+  const {
+    cartItems,
+    itemCount,
+    selectedAddress,
+    promoCode,
+    subtotal,
+    deliveryFee,
+    appliedDiscount,
+    total,
+    specialInstructions,
+    setSpecialInstructions,
+    placeOrderFromCart,
+  } = useCart();
   const {
     checkoutPaymentOptions,
     selectedPaymentId,
+    selectedPayment,
     selectPaymentForOrder,
   } = usePayment();
 
-  const itemCount = useMemo(
-    () => CHECKOUT_ITEMS.reduce((total, item) => total + item.quantity, 0),
-    []
-  );
-
   const handleSelectPayment = (methodId: CheckoutPaymentId) => {
     selectPaymentForOrder(methodId);
+  };
+
+  const handlePlaceOrder = () => {
+    if (!cartItems.length) {
+      return;
+    }
+
+    const order = placeOrderFromCart(selectedPayment);
+    router.push({
+      pathname: '/order-processing',
+      params: { orderId: order.id },
+    });
   };
 
   return (
@@ -113,7 +128,7 @@ export default function CheckoutScreen() {
               <View style={styles.addressTexts}>
                 <Text style={styles.addressTitle}>Home Address</Text>
                 <Text style={styles.addressSub} numberOfLines={1}>
-                  {CHECKOUT_DELIVERY_ADDRESS.address}
+                  {selectedAddress.fullAddress}
                 </Text>
               </View>
             </View>
@@ -145,7 +160,7 @@ export default function CheckoutScreen() {
           </View>
 
           {/* Items */}
-          {CHECKOUT_ITEMS.map((item, index) => (
+          {cartItems.map((item, index) => (
             <View
               key={item.id}
               style={[
@@ -186,25 +201,27 @@ export default function CheckoutScreen() {
             <View style={styles.totalRow}>
               <Text style={styles.totalLabel}>Subtotal</Text>
               <Text style={styles.totalValue}>
-                {formatPrice(CHECKOUT_SUBTOTAL)}
+                {formatPrice(subtotal)}
               </Text>
             </View>
             <View style={styles.totalRow}>
               <Text style={styles.totalLabel}>Delivery Fee</Text>
               <Text style={styles.totalValue}>
-                {formatPrice(CHECKOUT_DELIVERY_FEE)}
+                {formatPrice(deliveryFee)}
               </Text>
             </View>
             <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Discount (PROMO5)</Text>
+              <Text style={styles.totalLabel}>
+                Discount{promoCode.trim() ? ` (${promoCode.trim().toUpperCase()})` : ''}
+              </Text>
               <Text style={styles.totalValue}>
-                -{formatPrice(CHECKOUT_DISCOUNT)}
+                -{formatPrice(appliedDiscount)}
               </Text>
             </View>
             <View style={styles.totalRowBold}>
               <Text style={styles.grandTotalLabel}>Total</Text>
               <Text style={styles.grandTotalValue}>
-                {formatPrice(CHECKOUT_TOTAL)}
+                {formatPrice(total)}
               </Text>
             </View>
           </View>
@@ -213,9 +230,11 @@ export default function CheckoutScreen() {
           <Pressable
             style={({ pressed }) => [
               styles.placeOrderBtn,
-              pressed && styles.placeOrderPressed,
+              !cartItems.length && styles.placeOrderBtnDisabled,
+              pressed && cartItems.length > 0 && styles.placeOrderPressed,
             ]}
-            onPress={() => router.push('/order-processing')}>
+            disabled={!cartItems.length}
+            onPress={handlePlaceOrder}>
             <Text style={styles.placeOrderText}>Place Order</Text>
             <MaterialCommunityIcons
               name="chevron-right"
@@ -514,6 +533,9 @@ const styles = StyleSheet.create({
   },
   placeOrderPressed: {
     opacity: 0.88,
+  },
+  placeOrderBtnDisabled: {
+    opacity: 0.55,
   },
   placeOrderText: {
     fontSize: 16,

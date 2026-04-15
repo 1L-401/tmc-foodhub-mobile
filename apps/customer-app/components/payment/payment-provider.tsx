@@ -81,19 +81,28 @@ export function PaymentProvider({ children }: React.PropsWithChildren) {
     paymentOptions.find((option) => option.id === 'cod') ??
     FALLBACK_COD_OPTION;
 
-  const checkoutPaymentOptions =
-    preferredPayment.id === codPayment.id
-      ? [codPayment]
-      : [preferredPayment, codPayment];
+  const checkoutPaymentOptions = useMemo(
+    () =>
+      preferredPayment.id === codPayment.id
+        ? [codPayment]
+        : [preferredPayment, codPayment],
+    [codPayment, preferredPayment]
+  );
 
-  const checkoutSelectedPaymentId: CheckoutPaymentId =
-    selectedPaymentId === 'cod' || selectedPaymentId === preferredPaymentId
-      ? selectedPaymentId
-      : preferredPaymentId;
+  const checkoutSelectedPaymentId: CheckoutPaymentId = useMemo(
+    () =>
+      selectedPaymentId === 'cod' || selectedPaymentId === preferredPaymentId
+        ? selectedPaymentId
+        : preferredPaymentId,
+    [preferredPaymentId, selectedPaymentId]
+  );
 
-  const checkoutSelectedPayment =
-    paymentOptions.find((option) => option.id === checkoutSelectedPaymentId) ??
-    preferredPayment;
+  const checkoutSelectedPayment = useMemo(
+    () =>
+      paymentOptions.find((option) => option.id === checkoutSelectedPaymentId) ??
+      preferredPayment,
+    [checkoutSelectedPaymentId, paymentOptions, preferredPayment]
+  );
 
   const value = useMemo<PaymentContextValue>(
     () => ({
