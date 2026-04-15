@@ -143,7 +143,7 @@ export default function MoreScreen() {
           {/* Engagement */}
           <Animated.View entering={FadeInDown.delay(500).duration(400)}>
             <SectionHeader title="Engagement" />
-            <MenuItem icon="star-outline" label="Reviews" />
+            <MenuItem icon="star-outline" label="Reviews" onPress={() => router.push('/reviews')} />
           </Animated.View>
 
           <View style={styles.divider} />
