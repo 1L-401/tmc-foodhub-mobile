@@ -6,12 +6,13 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   View,
 } from 'react-native';
 import Animated, { FadeInDown, FadeInLeft } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { CustomToggle } from '@/components/custom-toggle';
 
 const PROFILE = {
   name: 'Juan Dela Cruz',
@@ -105,11 +106,9 @@ export default function MoreScreen() {
               icon="weather-night"
               label="Dark Mode"
               rightElement={
-                <Switch
+                <CustomToggle
                   value={darkMode}
                   onValueChange={setDarkMode}
-                  trackColor={{ false: '#E5E5E5', true: '#FCDCD8' }}
-                  thumbColor={darkMode ? '#AC1D10' : '#FFFFFF'}
                 />
               }
             />

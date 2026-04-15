@@ -1,9 +1,8 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
-  Animated as RNAnimated,
   Dimensions,
   Image,
   Modal,
@@ -17,6 +16,8 @@ import {
 } from 'react-native';
 import Animated, { FadeInDown, FadeInRight } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { CustomToggle } from '@/components/custom-toggle';
 
 import {
   CATEGORY_OPTIONS,
@@ -61,72 +62,6 @@ function BestSellerBadge() {
   );
 }
 
-/* ─── Custom Toggle (iOS-style, cross-platform) ─── */
-function CustomToggle({
-  value,
-  onValueChange,
-  activeColor = '#AC1D10',
-  size = 'normal',
-}: {
-  value: boolean;
-  onValueChange: (val: boolean) => void;
-  activeColor?: string;
-  size?: 'small' | 'normal';
-}) {
-  const animVal = useRef(new RNAnimated.Value(value ? 1 : 0)).current;
-
-  useEffect(() => {
-    RNAnimated.timing(animVal, {
-      toValue: value ? 1 : 0,
-      duration: 200,
-      useNativeDriver: false,
-    }).start();
-  }, [value]);
-
-  const isSmall = size === 'small';
-  const trackW = isSmall ? 40 : 48;
-  const trackH = isSmall ? 22 : 26;
-  const thumbSize = isSmall ? 18 : 22;
-  const thumbMargin = 2;
-
-  const trackBg = animVal.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['#E0E0E0', activeColor],
-  });
-
-  const thumbTranslate = animVal.interpolate({
-    inputRange: [0, 1],
-    outputRange: [thumbMargin, trackW - thumbSize - thumbMargin],
-  });
-
-  return (
-    <Pressable onPress={() => onValueChange(!value)}>
-      <RNAnimated.View
-        style={{
-          width: trackW,
-          height: trackH,
-          borderRadius: trackH / 2,
-          backgroundColor: trackBg,
-          justifyContent: 'center',
-        }}>
-        <RNAnimated.View
-          style={{
-            width: thumbSize,
-            height: thumbSize,
-            borderRadius: thumbSize / 2,
-            backgroundColor: '#FFF',
-            transform: [{ translateX: thumbTranslate }],
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 1 },
-            shadowOpacity: 0.2,
-            shadowRadius: 2,
-            elevation: 3,
-          }}
-        />
-      </RNAnimated.View>
-    </Pressable>
-  );
-}
 
 /* ─── Sort Dropdown ─── */
 function SortDropdown({
