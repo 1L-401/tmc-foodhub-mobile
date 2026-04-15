@@ -134,7 +134,7 @@ export default function MoreScreen() {
           <Animated.View entering={FadeInDown.delay(400).duration(400)}>
             <SectionHeader title="Menu" />
             <MenuItem icon="silverware-fork-knife" label="Menu" />
-            <MenuItem icon="view-grid-outline" label="Categories" />
+            <MenuItem icon="view-grid-outline" label="Categories" onPress={() => router.push('/categories')} />
             <MenuItem icon="tag-outline" label="Promotions" />
           </Animated.View>
 
