@@ -151,8 +151,11 @@ export default function MoreScreen() {
           {/* Finance */}
           <Animated.View entering={FadeInDown.delay(600).duration(400)}>
             <SectionHeader title="Finance" />
-            <MenuItem icon="chart-bar" label="Analytics" />
-            <MenuItem icon="cash-multiple" label="Earnings" />
+            <MenuItem icon="chart-bar" label="Analytics" onPress={() => router.push('/analytics')} />
+            <MenuItem icon="cash-multiple" label="Earnings" onPress={() => router.push('/earnings')} />
+            <MenuItem icon="swap-horizontal" label="Transactions" onPress={() => router.push('/transactions')} />
+            <MenuItem icon="bank-transfer" label="Payouts" onPress={() => router.push('/payouts')} />
+            <MenuItem icon="credit-card-outline" label="Payment Settings" onPress={() => router.push('/payment-settings')} />
           </Animated.View>
 
           <View style={styles.divider} />
