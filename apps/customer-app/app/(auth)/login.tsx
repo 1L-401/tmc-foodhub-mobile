@@ -17,12 +17,55 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { GoogleLogo } from '@/components/google-logo';
 import { TmcLogo } from '@/components/tmc-logo';
+import { useAuth } from '@/contexts/auth-context';
 
 export default function LoginScreen() {
+  const { signInWithCredentials } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const handleEmailChange = (value: string) => {
+    setEmail(value);
+
+    if (errorMessage) {
+      setErrorMessage(null);
+    }
+  };
+
+  const handlePasswordChange = (value: string) => {
+    setPassword(value);
+
+    if (errorMessage) {
+      setErrorMessage(null);
+    }
+  };
+
+  const handleLogin = async () => {
+    const normalizedEmail = email.trim();
+
+    if (!normalizedEmail || !password) {
+      setErrorMessage('Please enter both email and password.');
+      return;
+    }
+
+    setErrorMessage(null);
+    setIsLoading(true);
+
+    const result = await signInWithCredentials(normalizedEmail, password);
+
+    if (!result.success) {
+      setErrorMessage(result.error);
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(false);
+    router.replace('/(tabs)');
+  };
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
@@ -70,8 +113,9 @@ export default function LoginScreen() {
                   placeholderTextColor="#A0A0A0"
                   keyboardType="email-address"
                   autoCapitalize="none"
+                  autoCorrect={false}
                   value={email}
-                  onChangeText={setEmail}
+                  onChangeText={handleEmailChange}
                 />
               </View>
             </View>
@@ -91,7 +135,7 @@ export default function LoginScreen() {
                   placeholderTextColor="#A0A0A0"
                   secureTextEntry={!showPassword}
                   value={password}
-                  onChangeText={setPassword}
+                  onChangeText={handlePasswordChange}
                 />
                 <Pressable
                   style={styles.eyeIcon}
@@ -124,11 +168,14 @@ export default function LoginScreen() {
               </Pressable>
             </View>
 
+            {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+
             <Pressable
-              style={styles.loginButton}
-              onPress={() => router.replace('/(tabs)')}
+              style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
+              onPress={handleLogin}
+              disabled={isLoading}
             >
-              <Text style={styles.loginButtonText}>Login</Text>
+              <Text style={styles.loginButtonText}>{isLoading ? 'Signing in...' : 'Login'}</Text>
             </Pressable>
           </Animated.View>
 
@@ -300,12 +347,23 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#AC1D10',
   },
+  errorText: {
+    marginBottom: 16,
+    marginTop: -12,
+    color: '#C83B2D',
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
+  },
   loginButton: {
     backgroundColor: '#AC1D10',
     borderRadius: 12,
     height: 52,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  loginButtonDisabled: {
+    opacity: 0.7,
   },
   loginButtonText: {
     color: '#FFFFFF',

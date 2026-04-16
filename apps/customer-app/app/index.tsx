@@ -5,17 +5,24 @@ import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
 import { TmcLogo } from '@/components/tmc-logo';
+import { useAuth } from '@/contexts/auth-context';
 
 const SPLASH_DELAY_MS = 1600;
 
 export default function SplashScreen() {
+  const { isAuthenticated, isReady } = useAuth();
+
   useEffect(() => {
+    if (!isReady) {
+      return;
+    }
+
     const timeoutId = setTimeout(() => {
-      router.replace('/get-started');
+      router.replace(isAuthenticated ? '/(tabs)' : '/get-started');
     }, SPLASH_DELAY_MS);
 
     return () => clearTimeout(timeoutId);
-  }, []);
+  }, [isAuthenticated, isReady]);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
