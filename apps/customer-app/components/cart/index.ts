@@ -1,4 +1,5 @@
 export * from './add-on-card';
+export * from './cart-provider';
 export * from './cart-item';
 export * from './checkout-bar';
 export * from './delivery-address';

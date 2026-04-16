@@ -5,6 +5,8 @@ import React, { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import 'react-native-reanimated';
 
+import { CartProvider } from '@/components/cart';
+import { PaymentProvider } from '@/components/payment';
 import { AuthProvider, useAuth } from '@/contexts/auth-context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -46,8 +48,12 @@ function RootStack() {
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="checkout" options={{ headerShown: false }} />
+      <Stack.Screen name="order-processing" options={{ headerShown: false }} />
+      <Stack.Screen name="payment-failed" options={{ headerShown: false }} />
+      <Stack.Screen name="order-tracking/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="delivery-address" options={{ headerShown: false }} />
       <Stack.Screen name="add-address" options={{ headerShown: false }} />
+      <Stack.Screen name="add-payment-method" options={{ headerShown: false }} />
       <Stack.Screen name="restaurant/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="reviews/[id]" options={{ headerShown: false }} />
     </Stack>
@@ -59,9 +65,13 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AuthProvider>
-        <RootStack />
-      </AuthProvider>
+      <PaymentProvider>
+        <CartProvider>
+          <AuthProvider>
+            <RootStack />
+          </AuthProvider>
+        </CartProvider>
+      </PaymentProvider>
       <StatusBar style="auto" />
     </ThemeProvider>
   );

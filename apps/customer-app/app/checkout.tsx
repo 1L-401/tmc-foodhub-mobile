@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useMemo, useState } from 'react';
+import React from 'react';
 import {
   Image,
   Pressable,
@@ -13,17 +13,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import GCashIcon from '@/assets/images/GCash_idOP67IR4D_0.svg';
-import type { CheckoutPaymentOption } from '@/components/checkout/types';
+import { useCart } from '@/components/cart';
+import { PaymentOptionRow, type CheckoutPaymentId } from '@/components/checkout';
+import { usePayment } from '@/components/payment';
 import {
-  CHECKOUT_DELIVERY_ADDRESS,
-  CHECKOUT_DELIVERY_FEE,
-  CHECKOUT_DISCOUNT,
-  CHECKOUT_ITEMS,
-  CHECKOUT_PAYMENT_OPTIONS,
   CHECKOUT_SPECIAL_INSTRUCTIONS_PLACEHOLDER,
-  CHECKOUT_SUBTOTAL,
-  CHECKOUT_TOTAL,
 } from '@/constants/mock-checkout-data';
 
 function formatPrice(value: number) {
@@ -31,18 +25,40 @@ function formatPrice(value: number) {
 }
 
 export default function CheckoutScreen() {
-  const [specialInstructions, setSpecialInstructions] = useState('');
-  const [selectedPaymentId, setSelectedPaymentId] = useState<string>(
-    CHECKOUT_PAYMENT_OPTIONS[0]?.id ?? 'gcash'
-  );
+  const {
+    cartItems,
+    itemCount,
+    selectedAddress,
+    promoCode,
+    subtotal,
+    deliveryFee,
+    appliedDiscount,
+    total,
+    specialInstructions,
+    setSpecialInstructions,
+    placeOrderFromCart,
+  } = useCart();
+  const {
+    checkoutPaymentOptions,
+    selectedPaymentId,
+    selectedPayment,
+    selectPaymentForOrder,
+  } = usePayment();
 
-  const itemCount = useMemo(
-    () => CHECKOUT_ITEMS.reduce((total, item) => total + item.quantity, 0),
-    []
-  );
+  const handleSelectPayment = (methodId: CheckoutPaymentId) => {
+    selectPaymentForOrder(methodId);
+  };
 
-  const handleSelectPayment = (option: CheckoutPaymentOption) => {
-    setSelectedPaymentId(option.id);
+  const handlePlaceOrder = () => {
+    if (!cartItems.length) {
+      return;
+    }
+
+    const order = placeOrderFromCart(selectedPayment);
+    router.push({
+      pathname: '/order-processing',
+      params: { orderId: order.id },
+    });
   };
 
   return (
@@ -112,7 +128,7 @@ export default function CheckoutScreen() {
               <View style={styles.addressTexts}>
                 <Text style={styles.addressTitle}>Home Address</Text>
                 <Text style={styles.addressSub} numberOfLines={1}>
-                  {CHECKOUT_DELIVERY_ADDRESS.address}
+                  {selectedAddress.fullAddress}
                 </Text>
               </View>
             </View>
@@ -144,7 +160,7 @@ export default function CheckoutScreen() {
           </View>
 
           {/* Items */}
-          {CHECKOUT_ITEMS.map((item, index) => (
+          {cartItems.map((item, index) => (
             <View
               key={item.id}
               style={[
@@ -171,73 +187,41 @@ export default function CheckoutScreen() {
           {/* ── Payment method ── */}
           <Text style={styles.paymentTitle}>Payment method</Text>
 
-          {CHECKOUT_PAYMENT_OPTIONS.map((option) => {
-            const isSelected = selectedPaymentId === option.id;
-            const icon =
-              option.icon === 'gcash' ? (
-                <GCashIcon width={20} height={20} />
-              ) : (
-                <MaterialCommunityIcons
-                  name="cash-multiple"
-                  size={20}
-                  color="#8A8A8A"
-                />
-              );
-
-            return (
-              <Pressable
-                key={option.id}
-                style={[
-                  styles.paymentCard,
-                  isSelected && styles.paymentCardSelected,
-                ]}
-                onPress={() => handleSelectPayment(option)}>
-                <View style={styles.paymentLeft}>
-                  <View style={styles.paymentIconWrap}>{icon}</View>
-                  <View>
-                    <Text style={styles.paymentLabel}>
-                      {option.label}
-                    </Text>
-                    <Text style={styles.paymentSub}>
-                      {option.subtitle}
-                    </Text>
-                  </View>
-                </View>
-                <View
-                  style={[
-                    styles.radio,
-                    isSelected && styles.radioSelected,
-                  ]}>
-                  {isSelected && <View style={styles.radioDot} />}
-                </View>
-              </Pressable>
-            );
-          })}
+          {checkoutPaymentOptions.map((option) => (
+            <PaymentOptionRow
+              key={option.id}
+              option={option}
+              selected={selectedPaymentId === option.id}
+              onPress={() => handleSelectPayment(option.id)}
+            />
+          ))}
 
           {/* ── Totals ── */}
           <View style={styles.totals}>
             <View style={styles.totalRow}>
               <Text style={styles.totalLabel}>Subtotal</Text>
               <Text style={styles.totalValue}>
-                {formatPrice(CHECKOUT_SUBTOTAL)}
+                {formatPrice(subtotal)}
               </Text>
             </View>
             <View style={styles.totalRow}>
               <Text style={styles.totalLabel}>Delivery Fee</Text>
               <Text style={styles.totalValue}>
-                {formatPrice(CHECKOUT_DELIVERY_FEE)}
+                {formatPrice(deliveryFee)}
               </Text>
             </View>
             <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Discount (PROMO5)</Text>
+              <Text style={styles.totalLabel}>
+                Discount{promoCode.trim() ? ` (${promoCode.trim().toUpperCase()})` : ''}
+              </Text>
               <Text style={styles.totalValue}>
-                -{formatPrice(CHECKOUT_DISCOUNT)}
+                -{formatPrice(appliedDiscount)}
               </Text>
             </View>
             <View style={styles.totalRowBold}>
               <Text style={styles.grandTotalLabel}>Total</Text>
               <Text style={styles.grandTotalValue}>
-                {formatPrice(CHECKOUT_TOTAL)}
+                {formatPrice(total)}
               </Text>
             </View>
           </View>
@@ -246,9 +230,11 @@ export default function CheckoutScreen() {
           <Pressable
             style={({ pressed }) => [
               styles.placeOrderBtn,
-              pressed && styles.placeOrderPressed,
+              !cartItems.length && styles.placeOrderBtnDisabled,
+              pressed && cartItems.length > 0 && styles.placeOrderPressed,
             ]}
-            onPress={() => {}}>
+            disabled={!cartItems.length}
+            onPress={handlePlaceOrder}>
             <Text style={styles.placeOrderText}>Place Order</Text>
             <MaterialCommunityIcons
               name="chevron-right"
@@ -497,67 +483,6 @@ const styles = StyleSheet.create({
     marginTop: 18,
     marginBottom: 10,
   },
-  paymentCard: {
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: '#E5E5E5',
-    backgroundColor: '#F8F8F8',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  paymentCardSelected: {
-    borderColor: '#AC1D10',
-    backgroundColor: '#FFF8F7',
-  },
-  paymentLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1,
-  },
-  paymentIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E8E8E8',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  paymentLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 1,
-  },
-  paymentSub: {
-    fontSize: 12,
-    color: '#999',
-  },
-  radio: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#D0D0D0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  radioSelected: {
-    borderColor: '#AC1D10',
-  },
-  radioDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#AC1D10',
-  },
-
   /* ── Totals ── */
   totals: {
     marginTop: 16,
@@ -608,6 +533,9 @@ const styles = StyleSheet.create({
   },
   placeOrderPressed: {
     opacity: 0.88,
+  },
+  placeOrderBtnDisabled: {
+    opacity: 0.55,
   },
   placeOrderText: {
     fontSize: 16,

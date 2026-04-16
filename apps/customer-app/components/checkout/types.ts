@@ -1,7 +1,9 @@
-export type CheckoutPaymentIcon = 'gcash' | 'cod';
+export type CheckoutPaymentId = 'gcash' | 'maya' | 'card' | 'cod';
+
+export type CheckoutPaymentIcon = CheckoutPaymentId;
 
 export interface CheckoutPaymentOption {
-  id: string;
+  id: CheckoutPaymentId;
   label: string;
   subtitle: string;
   icon: CheckoutPaymentIcon;

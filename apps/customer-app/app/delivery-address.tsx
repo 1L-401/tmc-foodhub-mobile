@@ -11,32 +11,24 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import type { AddressLabel, SavedAddress } from '@/components/cart/types';
-import { SAVED_ADDRESSES } from '@/constants/mock-cart-data';
+import { useCart, type AddressLabel } from '@/components/cart';
 
 export default function DeliveryAddressScreen() {
+  const { savedAddresses, selectedAddress, selectAddressById } = useCart();
   const params = useLocalSearchParams<{ selectedId?: string }>();
   const [selectedId, setSelectedId] = useState(
-    params.selectedId ?? SAVED_ADDRESSES.find((a) => a.isDefault)?.id ?? ''
+    params.selectedId ?? selectedAddress.id
   );
-  const [addresses, setAddresses] = useState<SavedAddress[]>(SAVED_ADDRESSES);
 
   const handleSelect = (id: string) => {
     setSelectedId(id);
   };
 
   const handleDeliver = () => {
-    const selected = addresses.find((a) => a.id === selectedId);
+    const selected = savedAddresses.find((a) => a.id === selectedId);
     if (selected) {
-      router.navigate({
-        pathname: '/(tabs)/cart',
-        params: {
-          addressId: selected.id,
-          addressLabel: selected.label,
-          addressStreet: selected.street,
-          addressFull: selected.fullAddress,
-        },
-      });
+      selectAddressById(selected.id);
+      router.replace('/(tabs)/cart');
     }
   };
 
@@ -136,7 +128,7 @@ export default function DeliveryAddressScreen() {
           </View>
 
           {/* Address List */}
-          {addresses.map((addr) => {
+          {savedAddresses.map((addr) => {
             const isSelected = selectedId === addr.id;
             return (
               <Pressable

@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import { router } from 'expo-router';
+import React from 'react';
 import {
   FlatList,
   Pressable,
@@ -19,86 +19,52 @@ import {
   OrderSummary,
   PaymentMethod,
   PromoInput,
-  type CartItemModel,
+  useCart,
 } from '@/components/cart';
 import {
-  DEFAULT_DELIVERY_ADDRESS,
-  DEFAULT_DELIVERY_FEE,
-  DEFAULT_DISCOUNT,
-  DEFAULT_PAYMENT_METHOD,
   MOCK_ADD_ONS,
-  MOCK_CART_ITEMS,
 } from '@/constants/mock-cart-data';
+import { usePayment } from '@/components/payment';
 
 export default function CartScreen() {
-  const params = useLocalSearchParams<{
-    addressId?: string;
-    addressLabel?: string;
-    addressStreet?: string;
-    addressFull?: string;
-  }>();
-
-  const [cartItems, setCartItems] = useState<CartItemModel[]>(MOCK_CART_ITEMS);
-  const [promoCode, setPromoCode] = useState('');
-
-  // Use address from navigation params if available, otherwise use default
-  const currentAddress = useMemo(() => {
-    if (params.addressId) {
-      return {
-        label: 'Delivering to',
-        address: `123 Quezon Avenue, Unit 4B,...`,
-        fullAddress: params.addressFull ?? '',
-        id: params.addressId,
-      };
-    }
-    return {
-      label: 'Delivering to',
-      address: '123 Quezon Avenue, Unit 4B,...',
-      fullAddress: DEFAULT_DELIVERY_ADDRESS.fullAddress,
-      id: DEFAULT_DELIVERY_ADDRESS.id,
-    };
-  }, [params.addressId, params.addressFull]);
-
-  const itemCount = useMemo(
-    () => cartItems.reduce((total, item) => total + item.quantity, 0),
-    [cartItems]
-  );
-
-  const subtotal = useMemo(
-    () =>
-      cartItems.reduce((total, item) => total + item.price * item.quantity, 0),
-    [cartItems]
-  );
-
-  const total = Math.max(0, subtotal + DEFAULT_DELIVERY_FEE - DEFAULT_DISCOUNT);
+  const {
+    cartItems,
+    promoCode,
+    appliedDiscount,
+    deliveryFee,
+    itemCount,
+    subtotal,
+    total,
+    selectedAddress,
+    setPromoCode,
+    applyPromoCode,
+    increaseQuantity,
+    decreaseQuantity,
+    removeItem,
+  } = useCart();
+  const { preferredPayment } = usePayment();
 
   const handleIncreaseQuantity = (id: string) => {
-    setCartItems((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, quantity: item.quantity + 1 } : item
-      )
-    );
+    increaseQuantity(id);
   };
 
   const handleDecreaseQuantity = (id: string) => {
-    setCartItems((prev) =>
-      prev.map((item) =>
-        item.id === id
-          ? { ...item, quantity: Math.max(1, item.quantity - 1) }
-          : item
-      )
-    );
+    decreaseQuantity(id);
   };
 
   const handleDeleteItem = (id: string) => {
-    setCartItems((prev) => prev.filter((item) => item.id !== id));
+    removeItem(id);
   };
 
   const handleChangeAddress = () => {
     router.push({
       pathname: '/delivery-address',
-      params: { selectedId: currentAddress.id },
+      params: { selectedId: selectedAddress.id },
     });
+  };
+
+  const handleChangePaymentMethod = () => {
+    router.push('/add-payment-method');
   };
 
   return (
@@ -128,8 +94,8 @@ export default function CartScreen() {
           contentContainerStyle={styles.scrollContent}>
           {/* Delivery address card with map */}
           <DeliveryAddress
-            label={currentAddress.label}
-            address={currentAddress.address}
+            label={`Delivering to ${selectedAddress.label}`}
+            address={selectedAddress.fullAddress}
             onChangePress={handleChangeAddress}
           />
 
@@ -185,20 +151,22 @@ export default function CartScreen() {
         {/* ── Bottom Sheet ── */}
         <View style={styles.bottomSheet}>
           <PaymentMethod
-            method={DEFAULT_PAYMENT_METHOD}
-            onChange={() => {}}
+            icon={preferredPayment.icon}
+            label={preferredPayment.label}
+            subtitle={preferredPayment.subtitle}
+            onChange={handleChangePaymentMethod}
           />
 
           <PromoInput
             value={promoCode}
             onChangeText={setPromoCode}
-            onApply={() => {}}
+            onApply={applyPromoCode}
           />
 
           <OrderSummary
             subtotal={subtotal}
-            deliveryFee={DEFAULT_DELIVERY_FEE}
-            discount={DEFAULT_DISCOUNT}
+            deliveryFee={deliveryFee}
+            discount={appliedDiscount}
           />
 
           <CheckoutBar
