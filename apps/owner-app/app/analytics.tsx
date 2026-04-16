@@ -1,5 +1,5 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, Stack } from 'expo-router';
 import React, { useEffect } from 'react';
 import {
   Image,
@@ -163,7 +163,9 @@ export default function AnalyticsScreen() {
   }));
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+    <>
+      <Stack.Screen options={{ headerShown: false }} />
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.container}>
         {/* Top Header Row with Logo */}
         <Animated.View style={[styles.topNavRow, headerAnim]}>
@@ -367,6 +369,7 @@ export default function AnalyticsScreen() {
         </ScrollView>
       </View>
     </SafeAreaView>
+    </>
   );
 }
 

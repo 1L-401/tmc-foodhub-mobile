@@ -152,7 +152,7 @@ export default function MoreScreen() {
           <Animated.View entering={FadeInDown.delay(600).duration(400)}>
             <SectionHeader title="Finance" />
             <MenuItem icon="chart-bar" label="Analytics" onPress={() => router.push('/analytics')} />
-            <MenuItem icon="cash-multiple" label="Earnings" />
+            <MenuItem icon="cash-multiple" label="Earnings" onPress={() => router.push('/earnings')} />
           </Animated.View>
 
           <View style={styles.divider} />
