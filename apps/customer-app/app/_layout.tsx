@@ -54,6 +54,11 @@ function RootStack() {
       <Stack.Screen name="delivery-address" options={{ headerShown: false }} />
       <Stack.Screen name="add-address" options={{ headerShown: false }} />
       <Stack.Screen name="add-payment-method" options={{ headerShown: false }} />
+      <Stack.Screen name="account-settings" options={{ headerShown: false }} />
+      <Stack.Screen name="privacy-security" options={{ headerShown: false }} />
+      <Stack.Screen name="notification-settings" options={{ headerShown: false }} />
+      <Stack.Screen name="terms-policies" options={{ headerShown: false }} />
+      <Stack.Screen name="help-support" options={{ headerShown: false }} />
       <Stack.Screen name="restaurant/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="reviews/[id]" options={{ headerShown: false }} />
     </Stack>
