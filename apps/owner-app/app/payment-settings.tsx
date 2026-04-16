@@ -39,11 +39,12 @@ export default function PaymentSettingsScreen() {
   // --- Modal State ---
   const [modalVisible, setModalVisible] = useState(false);
   const [modalStep, setModalStep] = useState<
-    'select' | 'bank_details' | 'otp' | 'verifying'
+    'select' | 'bank_details' | 'otp' | 'verifying' | 'wallet_select' | 'wallet_link' | 'wallet_verify' | 'wallet_success'
   >('select');
 
   const [selectedMethod, setSelectedMethod] = useState<'bank' | 'wallet'>('bank');
   const [selectedBank, setSelectedBank] = useState<'BDO' | 'BPI' | 'Metrobank' | 'UnionBank'>('BDO');
+  const [selectedWallet, setSelectedWallet] = useState<'GCash' | 'Maya'>('GCash');
 
   const openModal = () => {
     setModalStep('select');
@@ -264,9 +265,9 @@ export default function PaymentSettingsScreen() {
             <View style={modalStyles.modalContainer}>
               <View style={modalStyles.modalHeader}>
                 <View>
-                  {modalStep !== 'select' && (
+                  {modalStep !== 'select' && modalStep !== 'wallet_success' && (
                     <Text style={modalStyles.stepCountText}>
-                      Step {modalStep === 'bank_details' ? '1' : modalStep === 'otp' ? '2' : '3'} of 3
+                      Step {['bank_details', 'wallet_select', 'wallet_link'].includes(modalStep) ? '1' : ['otp', 'wallet_verify'].includes(modalStep) ? '2' : '3'} of 3
                     </Text>
                   )}
                   <Text style={modalStyles.modalTitle}>
@@ -274,6 +275,10 @@ export default function PaymentSettingsScreen() {
                     {modalStep === 'bank_details' && 'Add Bank Account Details'}
                     {modalStep === 'otp' && 'Bank Verification'}
                     {modalStep === 'verifying' && 'Bank Verification'}
+                    {modalStep === 'wallet_select' && 'Choose E-Wallet'}
+                    {modalStep === 'wallet_link' && `Link ${selectedWallet} Wallet`}
+                    {modalStep === 'wallet_verify' && 'Verify E-Wallet'}
+                    {modalStep === 'wallet_success' && 'Linked Successfully'}
                   </Text>
                 </View>
                 <Pressable style={modalStyles.closeBtn} onPress={closeModal}>
@@ -322,7 +327,7 @@ export default function PaymentSettingsScreen() {
 
                     <Pressable
                       style={modalStyles.continueBtnRight}
-                      onPress={() => setModalStep('bank_details')}>
+                      onPress={() => setModalStep(selectedMethod === 'bank' ? 'bank_details' : 'wallet_select')}>
                       <Text style={modalStyles.continueBtnText}>Continue</Text>
                     </Pressable>
                   </Animated.View>
@@ -574,6 +579,238 @@ export default function PaymentSettingsScreen() {
                         style={modalStyles.actionBtnPrimary}
                         onPress={closeModal}>
                         <Text style={modalStyles.actionBtnPrimaryText}>Finish</Text>
+                      </Pressable>
+                    </View>
+                  </Animated.View>
+                )}
+
+                {modalStep === 'wallet_select' && (
+                  <Animated.View entering={FadeIn}>
+                    <Text style={modalStyles.modalSubtitle}>
+                      Select your preferred account for instant payouts. TMC Foodhub partners enjoy zero-fee settlements.
+                    </Text>
+
+                    {renderTimeline(1)}
+
+                    <View style={modalStyles.formSection}>
+                      <Text style={modalStyles.inputLabel}>Select your e-wallet</Text>
+
+                      <Pressable
+                        style={[
+                          modalStyles.bankSelectRow,
+                          selectedWallet === 'GCash' && modalStyles.bankSelectRowActive,
+                        ]}
+                        onPress={() => setSelectedWallet('GCash')}>
+                        <MaterialCommunityIcons
+                          name={selectedWallet === 'GCash' ? 'radiobox-marked' : 'radiobox-blank'}
+                          size={18}
+                          color={selectedWallet === 'GCash' ? '#AC1D10' : '#CCC'}
+                        />
+                        <View style={[modalStyles.bankLogoMock, { backgroundColor: '#007BF3' }]}>
+                          <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '800' }}>G</Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={modalStyles.bankNameText}>GCash</Text>
+                          <Text style={{ fontSize: 9, color: '#AC1D10', marginTop: 2 }}>Instant transfers to your GCash mobile wallet.</Text>
+                        </View>
+                      </Pressable>
+
+                      <Pressable
+                        style={[
+                          modalStyles.bankSelectRow,
+                          selectedWallet === 'Maya' && modalStyles.bankSelectRowActive,
+                        ]}
+                        onPress={() => setSelectedWallet('Maya')}>
+                        <MaterialCommunityIcons
+                          name={selectedWallet === 'Maya' ? 'radiobox-marked' : 'radiobox-blank'}
+                          size={18}
+                          color={selectedWallet === 'Maya' ? '#AC1D10' : '#CCC'}
+                        />
+                        <View style={[modalStyles.bankLogoMock, { backgroundColor: '#000000', borderRadius: 6 }]}>
+                          <Text style={{ color: '#00D165', fontSize: 7, fontWeight: '800' }}>maya</Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={modalStyles.bankNameText}>Maya</Text>
+                          <Text style={{ fontSize: 9, color: '#888', marginTop: 2 }}>Receive payouts to your Maya Business account.</Text>
+                        </View>
+                      </Pressable>
+
+                      <View style={modalStyles.actionsRow}>
+                        <Pressable
+                          style={modalStyles.actionBtnOutline}
+                          onPress={() => setModalStep('select')}>
+                          <Text style={modalStyles.actionBtnOutlineText}>Back</Text>
+                        </Pressable>
+                        <Pressable
+                          style={modalStyles.actionBtnPrimary}
+                          onPress={() => setModalStep('wallet_link')}>
+                          <Text style={modalStyles.actionBtnPrimaryText}>Continue</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  </Animated.View>
+                )}
+
+                {modalStep === 'wallet_link' && (
+                  <Animated.View entering={FadeIn}>
+                    <Text style={modalStyles.modalSubtitle}>
+                      Secure payout connection for TMC Foodhub.
+                    </Text>
+
+                    {renderTimeline(1)}
+
+                    <View style={modalStyles.formSection}>
+                      <View style={modalStyles.alertBoxAlt}>
+                        <MaterialCommunityIcons name="information" size={14} color="#952011" />
+                        <Text style={modalStyles.alertBoxText}>
+                          Enter your registered mobile number to receive a secure authorization code.
+                        </Text>
+                      </View>
+
+                      <View style={{ marginTop: 20 }}>
+                        <Text style={modalStyles.inputLabel}>Mobile Number</Text>
+                        <TextInput
+                          style={modalStyles.textInput}
+                          placeholder="+63 9XX XXX XXXX"
+                          placeholderTextColor="#AAA"
+                          keyboardType="phone-pad"
+                        />
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                          <MaterialCommunityIcons name="information" size={10} color="#888" />
+                          <Text style={modalStyles.helperTextSmall}>
+                            Must exactly match the name on your bank records.
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={modalStyles.checkboxRow}>
+                        <View style={modalStyles.checkboxChecked}>
+                          <MaterialCommunityIcons name="check" size={12} color="#FFF" />
+                        </View>
+                        <Text style={modalStyles.checkboxLabelText}>
+                          I authorize TMC Foodhub to facilitate automated payouts to my GCash account 
+                          and agree to the <Text style={{ color: '#AC1D10', fontWeight: '700' }}>Terms of Service.</Text>
+                        </Text>
+                      </View>
+
+                      <View style={modalStyles.actionsRow}>
+                        <Pressable
+                          style={modalStyles.actionBtnOutline}
+                          onPress={() => setModalStep('wallet_select')}>
+                          <Text style={modalStyles.actionBtnOutlineText}>Back</Text>
+                        </Pressable>
+                        <Pressable
+                          style={modalStyles.actionBtnPrimary}
+                          onPress={() => setModalStep('wallet_verify')}>
+                          <Text style={modalStyles.actionBtnPrimaryText}>Continue</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  </Animated.View>
+                )}
+
+                {modalStep === 'wallet_verify' && (
+                  <Animated.View entering={FadeIn}>
+                    <Text style={modalStyles.modalSubtitle}>
+                      Verify your e-wallet to securely receive payouts and prevent payment errors.
+                    </Text>
+                    {renderTimeline(2)}
+
+                    <View style={modalStyles.centralFormBox}>
+                      <View style={modalStyles.verifyIconWrapBig}>
+                        <MaterialCommunityIcons name="cellphone-message" size={24} color="#AC1D10" />
+                      </View>
+
+                      <Text style={modalStyles.verifyTitle}>Verify it's you</Text>
+                      <Text style={modalStyles.verifySubtitleCenter}>
+                        For security reasons, please verify this change. We've sent a 6-digit code
+                        to your registered mobile number ending in **** 8829.
+                      </Text>
+
+                      <View style={modalStyles.otpWrap}>
+                        <View style={modalStyles.otpBoxActive}>
+                          <Text style={modalStyles.otpTextActive}>2</Text>
+                        </View>
+                        <View style={modalStyles.otpBoxActive}>
+                          <Text style={modalStyles.otpTextActive}>4</Text>
+                        </View>
+                        <View style={modalStyles.otpBoxActive}>
+                          <Text style={modalStyles.otpTextActive}>6</Text>
+                        </View>
+                        <View style={modalStyles.otpBox}>
+                          <Text style={modalStyles.otpText}>0</Text>
+                        </View>
+                        <View style={modalStyles.otpBox}>
+                          <Text style={modalStyles.otpText}>0</Text>
+                        </View>
+                        <View style={modalStyles.otpBox}>
+                          <Text style={modalStyles.otpText}>0</Text>
+                        </View>
+                      </View>
+
+                      <Pressable
+                        style={[modalStyles.actionBtnPrimary, { alignSelf: 'stretch' }]}
+                        onPress={() => setModalStep('wallet_success')}>
+                        <Text style={modalStyles.actionBtnPrimaryText}>Verify & Connect Account</Text>
+                      </Pressable>
+
+                      <Text style={modalStyles.resendText}>
+                        Didn't receive the code? <Text style={{ color: '#AC1D10', fontWeight: '700' }}>Resend OTP (1:59s)</Text>
+                      </Text>
+                    </View>
+
+                    <View style={modalStyles.actionsRow}>
+                      <Pressable
+                        style={modalStyles.actionBtnOutline}
+                        onPress={() => setModalStep('wallet_link')}>
+                        <Text style={modalStyles.actionBtnOutlineText}>Back</Text>
+                      </Pressable>
+                    </View>
+                  </Animated.View>
+                )}
+
+                {modalStep === 'wallet_success' && (
+                  <Animated.View entering={FadeIn}>
+                    <Text style={modalStyles.modalSubtitle}>
+                      Your account is now ready for seamless payouts and faster transactions.
+                    </Text>
+
+                    <View style={[modalStyles.centralFormBox, { marginBottom: 24, padding: 20 }]}>
+                      <View style={[modalStyles.verifyIconWrapBig, { backgroundColor: '#ECFDF5', width: 44, height: 44, borderRadius: 22, marginTop: -32 }]}>
+                        <MaterialCommunityIcons name="check" size={20} color="#059669" />
+                      </View>
+
+                      <View style={[modalStyles.verifiedCard, { marginTop: 16 }]}>
+                        <View style={modalStyles.verifiedRowLeft}>
+                          <View style={[modalStyles.bankLogoMock, { backgroundColor: '#007BF3', width: 28, height: 28, borderRadius: 14, marginRight: 10 }]}>
+                            <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '800' }}>G</Text>
+                          </View>
+                          <View>
+                            <Text style={modalStyles.verifiedAcctName}>GCash Account</Text>
+                            <Text style={modalStyles.verifiedAcctNum}>**** **** 8829</Text>
+                          </View>
+                        </View>
+                        <View style={modalStyles.verifiedPill}>
+                          <MaterialCommunityIcons name="circle" size={6} color="#059669" />
+                          <Text style={[modalStyles.verifiedPillText, { marginLeft: 2 }]}>Active</Text>
+                        </View>
+                      </View>
+
+                      <View style={modalStyles.scheduleSummaryCard}>
+                        <MaterialCommunityIcons name="calendar-blank" size={14} color="#AC1D10" style={{ marginTop: 2 }} />
+                        <View style={{ flex: 1, marginLeft: 8 }}>
+                          <Text style={modalStyles.scheduleSubText}>Next scheduled payout</Text>
+                          <Text style={modalStyles.scheduleBoldText}>Tuesday, Mar 10</Text>
+                          <Text style={modalStyles.scheduleTinyText}>Estimated arrival: 1-3 business days</Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    <View style={[modalStyles.actionsRow, { marginTop: 0 }]}>
+                      <Pressable
+                        style={modalStyles.actionBtnPrimary}
+                        onPress={closeModal}>
+                        <Text style={modalStyles.actionBtnPrimaryText}>Done</Text>
                       </Pressable>
                     </View>
                   </Animated.View>
@@ -932,4 +1169,30 @@ const modalStyles = StyleSheet.create({
     borderRadius: 12,
   },
   verifiedPillText: { fontSize: 9, fontWeight: '700', color: '#059669' },
+
+  alertBoxAlt: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFF',
+    padding: 0,
+    marginTop: 8,
+    gap: 8,
+  },
+  checkboxRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 24, gap: 10, paddingRight: 10 },
+  checkboxChecked: { width: 18, height: 18, borderRadius: 4, backgroundColor: '#952011', alignItems: 'center', justifyContent: 'center', marginTop: 2 },
+  checkboxLabelText: { fontSize: 10, color: '#666', lineHeight: 16, flex: 1 },
+
+  scheduleSummaryCard: {
+    flexDirection: 'row',
+    alignSelf: 'stretch',
+    alignItems: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 16,
+  },
+  scheduleSubText: { fontSize: 9, color: '#888' },
+  scheduleBoldText: { fontSize: 12, fontWeight: '700', color: '#1A1A1A', marginVertical: 2 },
+  scheduleTinyText: { fontSize: 9, color: '#AAA' },
 });
