@@ -1,24 +1,26 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-} from 'react-native';
-import Animated, { FadeInDown, FadeInUp, FadeOutRight, FadeOutLeft } from 'react-native-reanimated';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import React, { useState } from 'react';
+import {
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
+} from 'react-native';
+import Animated, { FadeInDown, FadeInUp, FadeOutLeft, FadeOutRight } from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { GoogleLogo } from '@/components/google-logo';
 import { TmcLogo } from '@/components/tmc-logo';
+import { CustomerSignupPayload, OwnerSignupPayload, useAuth } from '@/contexts/auth-context';
 
 export default function SignUpScreen() {
+  const { signUpCustomer, signUpOwner, sendSignupOtp, signUpWithGoogleCredential } = useAuth();
   const [currentStep, setCurrentStep] = useState(1);
 
   // Step 1 State
@@ -35,13 +37,32 @@ export default function SignUpScreen() {
   const [address, setAddress] = useState('');
   const [contactNumber, setContactNumber] = useState('');
   const [deliveryInstructions, setDeliveryInstructions] = useState('');
+  const [restaurantName, setRestaurantName] = useState('');
+  const [businessAddress, setBusinessAddress] = useState('');
+  const [businessContactNumber, setBusinessContactNumber] = useState('');
+  const [businessPermit, setBusinessPermit] = useState('');
 
   // Step 3 State
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [acceptPrivacy, setAcceptPrivacy] = useState(false);
+  const [acceptMerchantAgreement, setAcceptMerchantAgreement] = useState(false);
   const [optInNews, setOptInNews] = useState(false);
+  const [emailVerificationToken, setEmailVerificationToken] = useState('');
+
+  // Social Signup State
+  const [googleCredential, setGoogleCredential] = useState('');
+
+  // Request State
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [otpStatusMessage, setOtpStatusMessage] = useState<string | null>(null);
 
   const handleBack = () => {
+    if (isSubmitting) {
+      return;
+    }
+
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
     } else {
@@ -49,13 +70,362 @@ export default function SignUpScreen() {
     }
   };
 
+  const clearError = () => {
+    if (errorMessage) {
+      setErrorMessage(null);
+    }
+  };
+
+  const isValidEmail = (value: string) => {
+    return /^\S+@\S+\.\S+$/.test(value);
+  };
+
+  const validateStep1 = () => {
+    if (!firstName.trim()) {
+      return 'Please enter your first name.';
+    }
+
+    if (!lastName.trim()) {
+      return 'Please enter your last name.';
+    }
+
+    if (!email.trim()) {
+      return 'Please enter your email.';
+    }
+
+    if (!isValidEmail(email.trim())) {
+      return 'Please enter a valid email address.';
+    }
+
+    if (!password) {
+      return 'Please enter a password.';
+    }
+
+    if (password.length < 8) {
+      return 'Password must be at least 8 characters.';
+    }
+
+    if (password !== confirmPassword) {
+      return 'Password confirmation does not match.';
+    }
+
+    return null;
+  };
+
+  const validateStep2 = () => {
+    if (userType === 'customer') {
+      if (!address.trim()) {
+        return 'Please enter your address.';
+      }
+
+      if (!contactNumber.trim()) {
+        return 'Please enter your contact number.';
+      }
+
+      return null;
+    }
+
+    if (!restaurantName.trim()) {
+      return 'Please enter your restaurant name.';
+    }
+
+    if (!businessAddress.trim()) {
+      return 'Please enter your business address.';
+    }
+
+    if (!businessContactNumber.trim()) {
+      return 'Please enter your business contact number.';
+    }
+
+    if (!businessPermit.trim()) {
+      return 'Please enter your business permit number.';
+    }
+
+    return null;
+  };
+
+  const validateStep3 = () => {
+    if (!emailVerificationToken.trim()) {
+      return 'Please enter your email verification token.';
+    }
+
+    if (!acceptTerms) {
+      return 'You need to accept Terms & Conditions to continue.';
+    }
+
+    if (!acceptPrivacy) {
+      return 'You need to accept Privacy Policy to continue.';
+    }
+
+    if (userType === 'partner' && !acceptMerchantAgreement) {
+      return 'You need to accept the Merchant Agreement to continue.';
+    }
+
+    return null;
+  };
+
+  const handleStep1Next = () => {
+    const validationMessage = validateStep1();
+
+    if (validationMessage) {
+      setErrorMessage(validationMessage);
+      return;
+    }
+
+    setErrorMessage(null);
+    setCurrentStep(2);
+  };
+
+  const handleStep2Next = () => {
+    const validationMessage = validateStep2();
+
+    if (validationMessage) {
+      setErrorMessage(validationMessage);
+      return;
+    }
+
+    setErrorMessage(null);
+    setCurrentStep(3);
+  };
+
+  const handleFacebookSignup = () => {
+    setErrorMessage('Facebook signup is not available yet.');
+  };
+
+  const handleGoogleSignup = async () => {
+    const credential = googleCredential.trim();
+
+    if (!credential) {
+      setErrorMessage('Please paste your Google credential token to continue with Google signup.');
+      return;
+    }
+
+    setErrorMessage(null);
+    setIsSubmitting(true);
+
+    const result = await signUpWithGoogleCredential(credential);
+
+    setIsSubmitting(false);
+
+    if (!result.success) {
+      setErrorMessage(result.error);
+      return;
+    }
+
+    router.replace(result.authenticated ? '/(tabs)' : '/(auth)/login');
+  };
+
+  const handleSendSignupOtp = async () => {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail) {
+      setErrorMessage('Please enter your email on Step 1 before requesting OTP.');
+      return;
+    }
+
+    if (!isValidEmail(normalizedEmail)) {
+      setErrorMessage('Please enter a valid email address before requesting OTP.');
+      return;
+    }
+
+    if (Platform.OS === 'web') {
+      const endpoint = userType === 'partner'
+        ? 'https://foodhub.tmc-innovations.com/api/owner/send-otp'
+        : 'https://foodhub.tmc-innovations.com/api/send-otp';
+
+      setErrorMessage(null);
+      setOtpStatusMessage(null);
+      setIsSendingOtp(true);
+
+      try {
+        await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: `email=${encodeURIComponent(normalizedEmail)}`,
+          mode: 'no-cors',
+        } as RequestInit);
+
+        setOtpStatusMessage('OTP request submitted. If your email is eligible, check your inbox.');
+      } catch {
+        setErrorMessage('Unable to send OTP from web right now. Please try Android/iOS.');
+      } finally {
+        setIsSendingOtp(false);
+      }
+
+      return;
+    }
+
+    setErrorMessage(null);
+    setOtpStatusMessage(null);
+    setIsSendingOtp(true);
+
+    const result = await sendSignupOtp(normalizedEmail, userType);
+
+    setIsSendingOtp(false);
+
+    if (!result.success) {
+      setErrorMessage(result.error);
+      return;
+    }
+
+    setOtpStatusMessage(result.message);
+  };
+
+  const handleFinishSignup = async () => {
+    const validationMessage = validateStep3();
+
+    if (validationMessage) {
+      setErrorMessage(validationMessage);
+      return;
+    }
+
+    if (Platform.OS === 'web') {
+      const trimmedBusinessAddress = businessAddress.trim();
+      const trimmedBusinessContact = businessContactNumber.trim();
+
+      const endpoint = userType === 'partner'
+        ? 'https://foodhub.tmc-innovations.com/api/owner/register'
+        : 'https://foodhub.tmc-innovations.com/api/register';
+
+      const formPayload: Record<string, string> = userType === 'partner'
+        ? {
+            email_verification_token: emailVerificationToken.trim(),
+            first_name: firstName.trim(),
+            last_name: lastName.trim(),
+            email: email.trim(),
+            password,
+            password_confirmation: confirmPassword,
+            restaurant_name: restaurantName.trim(),
+            business_address: trimmedBusinessAddress,
+            business_contact_number: trimmedBusinessContact,
+            business_permit: businessPermit.trim(),
+            terms_accepted: acceptTerms ? '1' : '0',
+            privacy_accepted: acceptPrivacy ? '1' : '0',
+            merchant_agreement_accepted: acceptMerchantAgreement ? '1' : '0',
+            phone: trimmedBusinessContact,
+            address: trimmedBusinessAddress,
+          }
+        : {
+            email_verification_token: emailVerificationToken.trim(),
+            first_name: firstName.trim(),
+            last_name: lastName.trim(),
+            email: email.trim(),
+            password,
+            password_confirmation: confirmPassword,
+            terms_accepted: acceptTerms ? '1' : '0',
+            privacy_accepted: acceptPrivacy ? '1' : '0',
+            address: address.trim(),
+            phone: contactNumber.trim(),
+            delivery_instructions: deliveryInstructions.trim(),
+          };
+
+      const encodedBody = Object.entries(formPayload)
+        .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+        .join('&');
+
+      setErrorMessage(null);
+      setOtpStatusMessage(null);
+      setIsSubmitting(true);
+
+      try {
+        await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: encodedBody,
+          mode: 'no-cors',
+        } as RequestInit);
+
+        setOtpStatusMessage('Signup request submitted. If your details are valid, proceed to login.');
+      } catch {
+        setErrorMessage('Unable to submit signup from web right now. Please try Android/iOS.');
+      } finally {
+        setIsSubmitting(false);
+      }
+
+      return;
+    }
+
+    setErrorMessage(null);
+    setIsSubmitting(true);
+
+    if (userType === 'customer') {
+      const payload: CustomerSignupPayload = {
+        email_verification_token: emailVerificationToken.trim(),
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        email: email.trim(),
+        password,
+        password_confirmation: confirmPassword,
+        terms_accepted: acceptTerms,
+        privacy_accepted: acceptPrivacy,
+        address: address.trim(),
+        phone: contactNumber.trim(),
+        delivery_instructions: deliveryInstructions.trim(),
+      };
+
+      const result = await signUpCustomer(payload);
+      setIsSubmitting(false);
+
+      if (!result.success) {
+        setErrorMessage(result.error);
+        return;
+      }
+
+      router.replace(result.authenticated ? '/(tabs)' : '/(auth)/login');
+      return;
+    }
+
+    const trimmedBusinessAddress = businessAddress.trim();
+    const trimmedBusinessContact = businessContactNumber.trim();
+
+    const payload: OwnerSignupPayload = {
+      email_verification_token: emailVerificationToken.trim(),
+      first_name: firstName.trim(),
+      last_name: lastName.trim(),
+      email: email.trim(),
+      password,
+      password_confirmation: confirmPassword,
+      restaurant_name: restaurantName.trim(),
+      business_address: trimmedBusinessAddress,
+      business_contact_number: trimmedBusinessContact,
+      business_permit: businessPermit.trim(),
+      terms_accepted: acceptTerms,
+      privacy_accepted: acceptPrivacy,
+      merchant_agreement_accepted: acceptMerchantAgreement,
+      phone: trimmedBusinessContact,
+      address: trimmedBusinessAddress,
+    };
+
+    const result = await signUpOwner(payload);
+    setIsSubmitting(false);
+
+    if (!result.success) {
+      setErrorMessage(result.error);
+      return;
+    }
+
+    router.replace(result.authenticated ? '/(tabs)' : '/(auth)/login');
+  };
+
   const getProgressDetails = () => {
     if (currentStep === 1) {
       return { width: '33%', text: 'Step 1 of 3: Personal Information', percent: '33% Complete' };
     }
+
     if (currentStep === 2) {
-      return { width: '66%', text: 'Step 2 of 3: Delivery Information', percent: '66% Complete' };
+      return {
+        width: '66%',
+        text: userType === 'partner'
+          ? 'Step 2 of 3: Business Information'
+          : 'Step 2 of 3: Delivery Information',
+        percent: '66% Complete',
+      };
     }
+
     return { width: '100%', text: 'Step 3 of 3: Confirmation', percent: '100% Complete' };
   };
 
@@ -71,7 +441,11 @@ export default function SignUpScreen() {
         <View style={styles.segmentedControl}>
           <Pressable
             style={[styles.segmentButton, userType === 'customer' && styles.segmentButtonActive]}
-            onPress={() => setUserType('customer')}
+            onPress={() => {
+              setUserType('customer');
+              setOtpStatusMessage(null);
+              clearError();
+            }}
           >
             <Text style={[styles.segmentText, userType === 'customer' && styles.segmentTextActive]}>
               Customer
@@ -79,7 +453,11 @@ export default function SignUpScreen() {
           </Pressable>
           <Pressable
             style={[styles.segmentButton, userType === 'partner' && styles.segmentButtonActive]}
-            onPress={() => setUserType('partner')}
+            onPress={() => {
+              setUserType('partner');
+              setOtpStatusMessage(null);
+              clearError();
+            }}
           >
             <Text style={[styles.segmentText, userType === 'partner' && styles.segmentTextActive]}>
               Restaurant Partner
@@ -97,7 +475,10 @@ export default function SignUpScreen() {
               placeholder="First Name"
               placeholderTextColor="#A0A0A0"
               value={firstName}
-              onChangeText={setFirstName}
+              onChangeText={(value) => {
+                setFirstName(value);
+                clearError();
+              }}
             />
           </View>
           <View style={[styles.inputWrapper, { flex: 1, marginLeft: 8 }]}>
@@ -106,7 +487,10 @@ export default function SignUpScreen() {
               placeholder="Last Name"
               placeholderTextColor="#A0A0A0"
               value={lastName}
-              onChangeText={setLastName}
+              onChangeText={(value) => {
+                setLastName(value);
+                clearError();
+              }}
             />
           </View>
         </View>
@@ -122,8 +506,13 @@ export default function SignUpScreen() {
             placeholderTextColor="#A0A0A0"
             keyboardType="email-address"
             autoCapitalize="none"
+            autoCorrect={false}
             value={email}
-            onChangeText={setEmail}
+            onChangeText={(value) => {
+              setEmail(value);
+              setOtpStatusMessage(null);
+              clearError();
+            }}
           />
         </View>
       </View>
@@ -138,7 +527,10 @@ export default function SignUpScreen() {
             placeholderTextColor="#A0A0A0"
             secureTextEntry={!showPassword}
             value={password}
-            onChangeText={setPassword}
+            onChangeText={(value) => {
+              setPassword(value);
+              clearError();
+            }}
           />
           <Pressable style={styles.eyeIcon} onPress={() => setShowPassword(!showPassword)}>
             <MaterialCommunityIcons name={showPassword ? 'eye-outline' : 'eye-off-outline'} size={20} color="#A0A0A0" />
@@ -157,7 +549,10 @@ export default function SignUpScreen() {
             placeholderTextColor="#A0A0A0"
             secureTextEntry={!showConfirmPassword}
             value={confirmPassword}
-            onChangeText={setConfirmPassword}
+            onChangeText={(value) => {
+              setConfirmPassword(value);
+              clearError();
+            }}
           />
           <Pressable style={styles.eyeIcon} onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
             <MaterialCommunityIcons name={showConfirmPassword ? 'eye-outline' : 'eye-off-outline'} size={20} color="#A0A0A0" />
@@ -165,7 +560,7 @@ export default function SignUpScreen() {
         </View>
       </View>
 
-      <Pressable style={styles.nextButton} onPress={() => setCurrentStep(2)}>
+      <Pressable style={styles.nextButton} onPress={handleStep1Next}>
         <Text style={styles.nextButtonText}>Next Step</Text>
       </Pressable>
 
@@ -175,12 +570,35 @@ export default function SignUpScreen() {
         <View style={styles.dividerLine} />
       </View>
 
+      <View style={styles.inputContainer}>
+        <Text style={styles.label}>Google Credential Token (for Google signup)</Text>
+        <View style={[styles.inputWrapper, styles.multiLineWrapper]}>
+          <TextInput
+            style={styles.multiLineInput}
+            placeholder="Paste Google ID token credential"
+            placeholderTextColor="#A0A0A0"
+            multiline
+            numberOfLines={3}
+            textAlignVertical="top"
+            value={googleCredential}
+            onChangeText={(value) => {
+              setGoogleCredential(value);
+              clearError();
+            }}
+          />
+        </View>
+      </View>
+
       <View style={styles.socialSection}>
-        <Pressable style={styles.socialButton} onPress={() => router.replace('/(tabs)')}>
+        <Pressable
+          style={[styles.socialButton, isSubmitting && styles.buttonDisabled]}
+          onPress={handleGoogleSignup}
+          disabled={isSubmitting}
+        >
           <GoogleLogo />
-          <Text style={styles.socialButtonText}>Continue with Google</Text>
+          <Text style={styles.socialButtonText}>{isSubmitting ? 'Connecting...' : 'Continue with Google'}</Text>
         </Pressable>
-        <Pressable style={styles.socialButton} onPress={() => router.replace('/(tabs)')}>
+        <Pressable style={styles.socialButton} onPress={handleFacebookSignup}>
           <MaterialCommunityIcons name="facebook" size={24} color="#4267B2" />
           <Text style={styles.socialButtonText}>Continue with Facebook</Text>
         </Pressable>
@@ -200,54 +618,144 @@ export default function SignUpScreen() {
   // --------------------------------------------------------
   const renderStep2 = () => (
     <Animated.View key="step2" entering={FadeInUp.springify()} exiting={FadeOutLeft} style={styles.formSection}>
-      <Text style={styles.sectionHeader}>Set up your delivery information</Text>
-      
-      <View style={styles.inputContainer}>
-        <Text style={styles.label}>Default Address</Text>
-        <View style={[styles.inputWrapper, styles.multiLineWrapper]}>
-          <TextInput
-            style={styles.multiLineInput}
-            placeholder="Enter full unit/building number, street, and barangay"
-            placeholderTextColor="#A0A0A0"
-            multiline
-            numberOfLines={4}
-            textAlignVertical="top"
-            value={address}
-            onChangeText={setAddress}
-          />
-        </View>
-      </View>
+      <Text style={styles.sectionHeader}>
+        {userType === 'partner'
+          ? 'Set up your business information'
+          : 'Set up your delivery information'}
+      </Text>
 
-      <View style={styles.inputContainer}>
-        <Text style={styles.label}>Contact Number</Text>
-        <View style={styles.inputWrapper}>
-          <MaterialCommunityIcons name="phone-outline" size={20} color="#A0A0A0" style={styles.inputIcon} />
-          <TextInput
-            style={styles.input}
-            placeholder="+63 000 000 0000"
-            placeholderTextColor="#A0A0A0"
-            keyboardType="phone-pad"
-            value={contactNumber}
-            onChangeText={setContactNumber}
-          />
-        </View>
-      </View>
+      {userType === 'customer' ? (
+        <>
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Default Address</Text>
+            <View style={[styles.inputWrapper, styles.multiLineWrapper]}>
+              <TextInput
+                style={styles.multiLineInput}
+                placeholder="Enter full unit/building number, street, and barangay"
+                placeholderTextColor="#A0A0A0"
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+                value={address}
+                onChangeText={(value) => {
+                  setAddress(value);
+                  clearError();
+                }}
+              />
+            </View>
+          </View>
 
-      <View style={styles.inputContainer}>
-        <Text style={styles.label}>Delivery Instructions</Text>
-        <View style={[styles.inputWrapper, styles.multiLineWrapper]}>
-          <TextInput
-            style={styles.multiLineInput}
-            placeholder="Gate codes, drop-off preferences, or landmarks..."
-            placeholderTextColor="#A0A0A0"
-            multiline
-            numberOfLines={4}
-            textAlignVertical="top"
-            value={deliveryInstructions}
-            onChangeText={setDeliveryInstructions}
-          />
-        </View>
-      </View>
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Contact Number</Text>
+            <View style={styles.inputWrapper}>
+              <MaterialCommunityIcons name="phone-outline" size={20} color="#A0A0A0" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="+63 000 000 0000"
+                placeholderTextColor="#A0A0A0"
+                keyboardType="phone-pad"
+                value={contactNumber}
+                onChangeText={(value) => {
+                  setContactNumber(value);
+                  clearError();
+                }}
+              />
+            </View>
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Delivery Instructions</Text>
+            <View style={[styles.inputWrapper, styles.multiLineWrapper]}>
+              <TextInput
+                style={styles.multiLineInput}
+                placeholder="Gate codes, drop-off preferences, or landmarks..."
+                placeholderTextColor="#A0A0A0"
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+                value={deliveryInstructions}
+                onChangeText={(value) => {
+                  setDeliveryInstructions(value);
+                  clearError();
+                }}
+              />
+            </View>
+          </View>
+        </>
+      ) : (
+        <>
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Restaurant Name</Text>
+            <View style={styles.inputWrapper}>
+              <MaterialCommunityIcons name="store-outline" size={20} color="#A0A0A0" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. Maria Kitchen"
+                placeholderTextColor="#A0A0A0"
+                value={restaurantName}
+                onChangeText={(value) => {
+                  setRestaurantName(value);
+                  clearError();
+                }}
+              />
+            </View>
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Business Address</Text>
+            <View style={[styles.inputWrapper, styles.multiLineWrapper]}>
+              <TextInput
+                style={styles.multiLineInput}
+                placeholder="Enter complete business address"
+                placeholderTextColor="#A0A0A0"
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+                value={businessAddress}
+                onChangeText={(value) => {
+                  setBusinessAddress(value);
+                  clearError();
+                }}
+              />
+            </View>
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Business Contact Number</Text>
+            <View style={styles.inputWrapper}>
+              <MaterialCommunityIcons name="phone-outline" size={20} color="#A0A0A0" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. 09179876543"
+                placeholderTextColor="#A0A0A0"
+                keyboardType="phone-pad"
+                value={businessContactNumber}
+                onChangeText={(value) => {
+                  setBusinessContactNumber(value);
+                  clearError();
+                }}
+              />
+            </View>
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Business Permit</Text>
+            <View style={styles.inputWrapper}>
+              <MaterialCommunityIcons name="file-document-outline" size={20} color="#A0A0A0" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. BP-2026-00123"
+                placeholderTextColor="#A0A0A0"
+                value={businessPermit}
+                onChangeText={(value) => {
+                  setBusinessPermit(value);
+                  clearError();
+                }}
+              />
+            </View>
+          </View>
+        </>
+      )}
 
       {/* Footer Navigation */}
       <View style={styles.footerRowNavigation}>
@@ -255,7 +763,7 @@ export default function SignUpScreen() {
           <MaterialCommunityIcons name="arrow-left" size={20} color="#1A1A1A" />
           <Text style={styles.backButtonOutlineText}>Back</Text>
         </Pressable>
-        <Pressable style={styles.nextButtonFlex} onPress={() => setCurrentStep(3)}>
+        <Pressable style={styles.nextButtonFlex} onPress={handleStep2Next}>
           <Text style={styles.nextButtonFlexText}>Next Step</Text>
           <MaterialCommunityIcons name="arrow-right" size={20} color="#FFF" />
         </Pressable>
@@ -275,7 +783,10 @@ export default function SignUpScreen() {
       
       <Pressable 
         style={[styles.checkboxCard, acceptTerms && styles.checkboxCardActive]}
-        onPress={() => setAcceptTerms(!acceptTerms)}
+        onPress={() => {
+          setAcceptTerms(!acceptTerms);
+          clearError();
+        }}
       >
         <MaterialCommunityIcons 
           name={acceptTerms ? "circle" : "circle-outline"} 
@@ -293,7 +804,10 @@ export default function SignUpScreen() {
 
       <Pressable 
         style={[styles.checkboxCard, acceptPrivacy && styles.checkboxCardActive]}
-        onPress={() => setAcceptPrivacy(!acceptPrivacy)}
+        onPress={() => {
+          setAcceptPrivacy(!acceptPrivacy);
+          clearError();
+        }}
       >
         <MaterialCommunityIcons 
           name={acceptPrivacy ? "circle" : "circle-outline"} 
@@ -308,6 +822,59 @@ export default function SignUpScreen() {
           </Text>
         </View>
       </Pressable>
+
+      {userType === 'partner' ? (
+        <Pressable
+          style={[styles.checkboxCard, acceptMerchantAgreement && styles.checkboxCardActive]}
+          onPress={() => {
+            setAcceptMerchantAgreement(!acceptMerchantAgreement);
+            clearError();
+          }}
+        >
+          <MaterialCommunityIcons
+            name={acceptMerchantAgreement ? 'circle' : 'circle-outline'}
+            size={24}
+            color={acceptMerchantAgreement ? '#AC1D10' : '#D4D4D4'}
+            style={styles.cardIcon}
+          />
+          <View style={styles.cardTextContainer}>
+            <Text style={styles.cardTitle}>Accept Merchant Agreement</Text>
+            <Text style={styles.cardSubtitle}>
+              I agree to the merchant onboarding and operations terms.
+            </Text>
+          </View>
+        </Pressable>
+      ) : null}
+
+      <View style={styles.inputContainer}>
+        <Text style={styles.label}>Email Verification Token</Text>
+        <View style={styles.inputWrapper}>
+          <MaterialCommunityIcons name="shield-key-outline" size={20} color="#A0A0A0" style={styles.inputIcon} />
+          <TextInput
+            style={styles.input}
+            placeholder={userType === 'partner' ? 'token_from_owner_verify_otp' : 'token_from_verify_otp'}
+            placeholderTextColor="#A0A0A0"
+            autoCapitalize="none"
+            autoCorrect={false}
+            value={emailVerificationToken}
+            onChangeText={(value) => {
+              setEmailVerificationToken(value);
+              clearError();
+            }}
+          />
+        </View>
+
+        <Pressable
+          style={[styles.sendOtpButton, (isSendingOtp || isSubmitting) && styles.buttonDisabled]}
+          onPress={handleSendSignupOtp}
+          disabled={isSendingOtp || isSubmitting}
+        >
+          <MaterialCommunityIcons name="send-outline" size={18} color="#AC1D10" />
+          <Text style={styles.sendOtpButtonText}>{isSendingOtp ? 'Sending OTP...' : 'Send OTP'}</Text>
+        </Pressable>
+
+        {otpStatusMessage ? <Text style={styles.otpStatusText}>{otpStatusMessage}</Text> : null}
+      </View>
 
       <Pressable style={styles.simpleCheckboxRow} onPress={() => setOptInNews(!optInNews)}>
         <MaterialCommunityIcons 
@@ -327,8 +894,18 @@ export default function SignUpScreen() {
           <MaterialCommunityIcons name="arrow-left" size={20} color="#1A1A1A" />
           <Text style={styles.backButtonOutlineText}>Back</Text>
         </Pressable>
-        <Pressable style={[styles.nextButtonFlex, { justifyContent: 'center', paddingHorizontal: 0 }]} onPress={() => router.replace('/(tabs)')}>
-          <Text style={[styles.nextButtonFlexText, { marginLeft: 0 }]}>Finish!</Text>
+        <Pressable
+          style={[
+            styles.nextButtonFlex,
+            { justifyContent: 'center', paddingHorizontal: 0 },
+            isSubmitting && styles.buttonDisabled,
+          ]}
+          onPress={handleFinishSignup}
+          disabled={isSubmitting}
+        >
+          <Text style={[styles.nextButtonFlexText, { marginLeft: 0 }]}>
+            {isSubmitting ? 'Creating account...' : 'Finish!'}
+          </Text>
         </Pressable>
       </View>
     </Animated.View>
@@ -360,7 +937,11 @@ export default function SignUpScreen() {
           {/* Title & Progress */}
           <View style={styles.titleSection}>
             <Text style={styles.mainTitle}>
-              {currentStep === 1 ? 'Sign up as a Customer or Restaurant Partner' : 'Sign up as a Customer'}
+              {currentStep === 1
+                ? 'Sign up as a Customer or Restaurant Partner'
+                : userType === 'partner'
+                  ? 'Sign up as a Restaurant Partner'
+                  : 'Sign up as a Customer'}
             </Text>
             
             <View style={styles.progressContainer}>
@@ -375,6 +956,8 @@ export default function SignUpScreen() {
             
             <View style={styles.titleDivider} />
           </View>
+
+          {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
 
           {/* Dynamically rendering Steps */}
           {currentStep === 1 && renderStep1()}
@@ -466,6 +1049,13 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#EEEEEE',
     width: '100%',
+  },
+  errorText: {
+    color: '#C83B2D',
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
+    marginBottom: 14,
   },
   formSection: {
     width: '100%',
@@ -574,6 +1164,33 @@ const styles = StyleSheet.create({
     height: 52,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  buttonDisabled: {
+    opacity: 0.75,
+  },
+  sendOtpButton: {
+    marginTop: 10,
+    height: 44,
+    borderWidth: 1,
+    borderColor: '#AC1D10',
+    borderRadius: 12,
+    backgroundColor: '#FFF5F4',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sendOtpButtonText: {
+    marginLeft: 8,
+    color: '#AC1D10',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  otpStatusText: {
+    marginTop: 8,
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: '600',
+    color: '#1D7A35',
   },
   nextButtonText: {
     color: '#FFFFFF',
