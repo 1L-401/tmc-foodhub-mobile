@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     KeyboardAvoidingView,
     Platform,
@@ -16,40 +16,130 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { TmcLogo } from '@/components/tmc-logo';
+import { useAuth } from '@/contexts/auth-context';
 
 const OTP_LENGTH = 6;
+const RESEND_COOLDOWN_SECONDS = 30;
 
 export default function VerifyCodeScreen() {
+  const { requestPasswordReset, verifyPasswordResetOtp } = useAuth();
+  const params = useLocalSearchParams<{ email?: string }>();
   const [code, setCode] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [isResending, setIsResending] = useState(false);
+  const [resendCountdown, setResendCountdown] = useState(RESEND_COOLDOWN_SECONDS);
   const hiddenInputRef = useRef<TextInput>(null);
+
+  const normalizedEmail = useMemo(() => {
+    const rawEmail = params.email;
+
+    if (typeof rawEmail !== 'string') {
+      return '';
+    }
+
+    return rawEmail.trim().toLowerCase();
+  }, [params.email]);
+
+  useEffect(() => {
+    if (resendCountdown <= 0) {
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      setResendCountdown((previousValue) => Math.max(previousValue - 1, 0));
+    }, 1000);
+
+    return () => {
+      clearTimeout(timeout);
+    };
+  }, [resendCountdown]);
 
   const handleCodeChange = (value: string) => {
     const numericCode = value.replace(/\D/g, '').slice(0, OTP_LENGTH);
     setCode(numericCode);
 
     if (errorMessage) {
-      setErrorMessage('');
+      setErrorMessage(null);
     }
   };
 
-  const handleVerify = () => {
+  const handleVerify = async () => {
+    if (isVerifying) {
+      return;
+    }
+
+    if (!normalizedEmail) {
+      setErrorMessage('Missing email. Please go back and request a new reset code.');
+      return;
+    }
+
     if (code.length !== OTP_LENGTH) {
       setErrorMessage('Please enter the 6-digit code.');
       return;
     }
 
-    setErrorMessage('');
-    router.push('/(auth)/create-new-password');
+    setErrorMessage(null);
+    setStatusMessage(null);
+    setIsVerifying(true);
+
+    const result = await verifyPasswordResetOtp(normalizedEmail, code);
+
+    setIsVerifying(false);
+
+    if (!result.success) {
+      setErrorMessage(result.error);
+      return;
+    }
+
+    router.push({
+      pathname: '/(auth)/create-new-password',
+      params: {
+        resetToken: result.resetToken,
+        email: normalizedEmail,
+      },
+    });
   };
 
-  const handleResend = () => {
+  const handleResend = async () => {
+    if (resendCountdown > 0 || isResending) {
+      return;
+    }
+
+    if (!normalizedEmail) {
+      setErrorMessage('Missing email. Please go back and request a new reset code.');
+      return;
+    }
+
+    setErrorMessage(null);
+    setStatusMessage(null);
+    setIsResending(true);
+
+    const result = await requestPasswordReset(normalizedEmail);
+
+    setIsResending(false);
+
+    if (!result.success) {
+      setErrorMessage(result.error);
+      return;
+    }
+
     setCode('');
-    setErrorMessage('');
+    setStatusMessage(result.message);
+    setResendCountdown(RESEND_COOLDOWN_SECONDS);
     hiddenInputRef.current?.focus();
   };
 
   const isCodeComplete = code.length === OTP_LENGTH;
+  const isSubmitDisabled = !isCodeComplete || isVerifying || !normalizedEmail;
+  const isResendDisabled = resendCountdown > 0 || isResending;
+
+  const resendLabel = isResending
+    ? 'Sending...'
+    : resendCountdown > 0
+      ? `Resend (${resendCountdown}s)`
+      : 'Resend Code';
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
@@ -73,12 +163,18 @@ export default function VerifyCodeScreen() {
           <Animated.View entering={FadeInDown.delay(120).springify()} style={styles.titleSection}>
             <Text style={styles.title}>Verify your email</Text>
             <Text style={styles.subtitle}>
-              We&apos;ve sent a 6-digit code to your email address. Enter it below to verify your
-              account.
+              We&apos;ve sent a 6-digit code to your email address. Enter it below to continue your
+              password reset.
             </Text>
           </Animated.View>
 
           <Animated.View entering={FadeInDown.delay(180).springify()} style={styles.formSection}>
+            {!normalizedEmail && (
+              <Text style={styles.errorText}>
+                Missing email context. Please go back and request a reset code again.
+              </Text>
+            )}
+
             <Pressable style={styles.otpRow} onPress={() => hiddenInputRef.current?.focus()}>
               {Array.from({ length: OTP_LENGTH }).map((_, index) => {
                 const digit = code[index];
@@ -109,24 +205,33 @@ export default function VerifyCodeScreen() {
             />
 
             {!!errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
+            {!!statusMessage && <Text style={styles.statusText}>{statusMessage}</Text>}
 
             <Pressable
-              style={[styles.submitButton, !isCodeComplete && styles.submitButtonDisabled]}
-              onPress={handleVerify}
-              disabled={!isCodeComplete}>
+              style={[styles.submitButton, isSubmitDisabled && styles.submitButtonDisabled]}
+              onPress={() => {
+                void handleVerify();
+              }}
+              disabled={isSubmitDisabled}>
               <Text
                 style={[
                   styles.submitButtonText,
-                  !isCodeComplete && styles.submitButtonTextDisabled,
+                  isSubmitDisabled && styles.submitButtonTextDisabled,
                 ]}>
-                Verify Code
+                {isVerifying ? 'Verifying...' : 'Verify Code'}
               </Text>
             </Pressable>
 
             <View style={styles.resendContainer}>
               <Text style={styles.resendText}>Didn&apos;t receive the code? </Text>
-              <Pressable onPress={handleResend}>
-                <Text style={styles.resendLink}>Resend (30s)</Text>
+              <Pressable
+                onPress={() => {
+                  void handleResend();
+                }}
+                disabled={isResendDisabled}>
+                <Text style={[styles.resendLink, isResendDisabled && styles.resendLinkDisabled]}>
+                  {resendLabel}
+                </Text>
               </Pressable>
             </View>
 
@@ -253,6 +358,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginBottom: 10,
   },
+  statusText: {
+    color: '#1E7A38',
+    fontSize: 12,
+    marginBottom: 10,
+  },
   resendContainer: {
     marginTop: 16,
     flexDirection: 'row',
@@ -267,6 +377,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#AC1D10',
     fontWeight: '700',
+  },
+  resendLinkDisabled: {
+    color: '#B8B8B8',
   },
   helpCard: {
     marginTop: 16,

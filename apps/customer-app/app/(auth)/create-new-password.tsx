@@ -1,5 +1,5 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useMemo, useState } from 'react';
 import {
@@ -16,12 +16,17 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { TmcLogo } from '@/components/tmc-logo';
+import { useAuth } from '@/contexts/auth-context';
 
 export default function CreateNewPasswordScreen() {
+  const { resetPasswordWithToken } = useAuth();
+  const params = useLocalSearchParams<{ resetToken?: string; email?: string }>();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const requirements = useMemo(
     () => [
@@ -30,33 +35,72 @@ export default function CreateNewPasswordScreen() {
         label: 'At least 8 characters',
         met: password.length >= 8,
       },
-      {
-        key: 'upperLower',
-        label: 'Contains uppercase and lowercase letters',
-        met: /[A-Z]/.test(password) && /[a-z]/.test(password),
-      },
-      {
-        key: 'number',
-        label: 'Contains at least one number',
-        met: /\d/.test(password),
-      },
-      {
-        key: 'special',
-        label: 'Contains at least one special character',
-        met: /[^A-Za-z0-9]/.test(password),
-      },
     ],
     [password]
   );
 
+  const resetToken = typeof params.resetToken === 'string' ? params.resetToken : '';
+  const hasResetToken = Boolean(resetToken);
   const meetsRequirements = requirements.every((item) => item.met);
   const hasConfirmInput = confirmPassword.length > 0;
   const passwordsMatch = password === confirmPassword && hasConfirmInput;
   const showMismatchError = hasConfirmInput && password !== confirmPassword;
-  const canSubmit = meetsRequirements && passwordsMatch;
+  const canSubmit = meetsRequirements && passwordsMatch && hasResetToken && !isSubmitting;
 
-  const handleResetPassword = () => {
+  const handlePasswordChange = (value: string) => {
+    setPassword(value);
+
+    if (errorMessage) {
+      setErrorMessage(null);
+    }
+  };
+
+  const handleConfirmPasswordChange = (value: string) => {
+    setConfirmPassword(value);
+
+    if (errorMessage) {
+      setErrorMessage(null);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (isSubmitting) {
+      return;
+    }
+
+    if (!hasResetToken) {
+      setErrorMessage('Reset session is missing or expired. Please request a new code.');
+      return;
+    }
+
+    if (!password || !confirmPassword) {
+      setErrorMessage('Please enter and confirm your new password.');
+      return;
+    }
+
+    if (password.length < 8) {
+      setErrorMessage('Password must be at least 8 characters.');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setErrorMessage('Passwords do not match.');
+      return;
+    }
+
     if (!canSubmit) {
+      return;
+    }
+
+    setErrorMessage(null);
+    setIsSubmitting(true);
+
+    const result = await resetPasswordWithToken(resetToken, password, confirmPassword);
+
+    setIsSubmitting(false);
+
+    if (!result.success) {
+      setErrorMessage(result.error);
       return;
     }
 
@@ -85,11 +129,17 @@ export default function CreateNewPasswordScreen() {
           <Animated.View entering={FadeInDown.delay(120).springify()} style={styles.titleSection}>
             <Text style={styles.title}>Create your new password</Text>
             <Text style={styles.subtitle}>
-              Use a strong password to keep your account secure.
+              Set a new password to regain access to your account.
             </Text>
           </Animated.View>
 
           <Animated.View entering={FadeInDown.delay(180).springify()} style={styles.formSection}>
+            {!hasResetToken && (
+              <Text style={styles.errorText}>
+                Reset session is missing or expired. Please go back and request a new code.
+              </Text>
+            )}
+
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Password</Text>
               <View style={styles.inputWrapper}>
@@ -106,7 +156,7 @@ export default function CreateNewPasswordScreen() {
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
                   value={password}
-                  onChangeText={setPassword}
+                  onChangeText={handlePasswordChange}
                 />
                 <Pressable style={styles.eyeIcon} onPress={() => setShowPassword(!showPassword)}>
                   <MaterialCommunityIcons
@@ -134,7 +184,7 @@ export default function CreateNewPasswordScreen() {
                   secureTextEntry={!showConfirmPassword}
                   autoCapitalize="none"
                   value={confirmPassword}
-                  onChangeText={setConfirmPassword}
+                  onChangeText={handleConfirmPasswordChange}
                 />
                 <Pressable
                   style={styles.eyeIcon}
@@ -148,7 +198,10 @@ export default function CreateNewPasswordScreen() {
               </View>
             </View>
 
-            {showMismatchError && <Text style={styles.errorText}>Passwords do not match.</Text>}
+            {!!errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
+            {showMismatchError && !errorMessage && (
+              <Text style={styles.errorText}>Passwords do not match.</Text>
+            )}
 
             <View style={styles.requirementsCard}>
               <Text style={styles.requirementsTitle}>Password requirements</Text>
@@ -172,14 +225,16 @@ export default function CreateNewPasswordScreen() {
 
             <Pressable
               style={[styles.submitButton, !canSubmit && styles.submitButtonDisabled]}
-              onPress={handleResetPassword}
+              onPress={() => {
+                void handleResetPassword();
+              }}
               disabled={!canSubmit}>
               <Text
                 style={[
                   styles.submitButtonText,
                   !canSubmit && styles.submitButtonTextDisabled,
                 ]}>
-                Reset Password
+                {isSubmitting ? 'Resetting Password...' : 'Reset Password'}
               </Text>
             </Pressable>
           </Animated.View>
