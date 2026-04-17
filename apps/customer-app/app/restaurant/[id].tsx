@@ -4,18 +4,19 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  Image,
   Dimensions,
   TextInput,
   ScrollView,
   FlatList,
+  ActivityIndicator,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 
-import { RESTAURANT_MENU } from '@/constants/mock-data';
+import { useRestaurantMenu, MenuItem } from '@/src/features/browse/api/useRestaurantMenu';
 
 const { width } = Dimensions.get('window');
 const COLUMN_WIDTH = (width - 48) / 2; // 16 margin on sides + 16 gap
@@ -23,9 +24,36 @@ const COLUMN_WIDTH = (width - 48) / 2; // 16 margin on sides + 16 gap
 export default function RestaurantDetails() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const [activeCategory, setActiveCategory] = useState('Popular');
+  const [activeCategory, setActiveCategory] = React.useState<string | null>(null);
 
-  const { restaurant, menuCategories, items } = RESTAURANT_MENU;
+  const { data: menuData, isLoading, isError } = useRestaurantMenu(id);
+
+  React.useEffect(() => {
+    if (menuData?.categories?.length && !activeCategory) {
+      setActiveCategory(menuData.categories[0].name);
+    }
+  }, [menuData, activeCategory]);
+
+  if (isLoading || !menuData) {
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#AC1D10" />
+      </SafeAreaView>
+    );
+  }
+
+  if (isError) {
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <Text style={{ color: 'red' }}>Failed to load menu</Text>
+        <Pressable onPress={() => router.back()} style={{ marginTop: 20 }}>
+          <Text style={{ color: '#AC1D10', fontWeight: 'bold' }}>Go Back</Text>
+        </Pressable>
+      </SafeAreaView>
+    );
+  }
+
+  const { restaurant, categories, menu } = menuData;
 
   const renderHeader = () => (
     <View style={styles.headerContainer}>
@@ -36,16 +64,26 @@ export default function RestaurantDetails() {
 
       {/* Logo */}
       <View style={styles.logoContainer}>
-        <Image style={styles.logo} source={{ uri: restaurant.logo }} />
+        {restaurant.logo ? (
+          <Image 
+            style={styles.logo} 
+            source={{ uri: restaurant.logo?.startsWith('http') ? restaurant.logo : `https://foodhub.tmc-innovations.com${restaurant.logo}` }} 
+            contentFit="cover"
+          />
+        ) : (
+          <MaterialCommunityIcons name="store" size={32} color="#CCC" />
+        )}
       </View>
 
       {/* Info */}
-      <Text style={styles.restaurantName}>{restaurant.name}</Text>
+      <Text style={styles.restaurantName}>{restaurant.name || restaurant.restaurant_name}</Text>
       <Pressable 
         style={styles.tagsRow} 
         onPress={() => router.push({ pathname: '/reviews/[id]', params: { id } })}
       >
-        <Text style={styles.brandTag}>{restaurant.categories.join(' • ')}</Text>
+        <Text style={styles.brandTag}>
+          {restaurant.cuisine_type?.length ? restaurant.cuisine_type.join(' • ') : (restaurant.categories?.join(' • ') || 'Restaurant')}
+        </Text>
         <Text style={styles.dot}>•</Text>
         <MaterialCommunityIcons name="star" size={14} color="#F9A825" />
         <MaterialCommunityIcons name="star" size={14} color="#F9A825" />
@@ -53,7 +91,7 @@ export default function RestaurantDetails() {
         <MaterialCommunityIcons name="star" size={14} color="#F9A825" />
         <MaterialCommunityIcons name="star-half" size={14} color="#F9A825" />
         <Text style={styles.ratingText}>
-          {restaurant.rating} <Text style={styles.reviewsText}>({restaurant.reviews.toLocaleString()})</Text>
+          {restaurant.rating ?? 0} <Text style={styles.reviewsText}>({(restaurant.reviews_count ?? restaurant.reviews ?? 0).toLocaleString()})</Text>
         </Text>
       </Pressable>
 
@@ -100,15 +138,15 @@ export default function RestaurantDetails() {
       {/* Tabs */}
       <View style={styles.tabsWrapper}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {menuCategories.map((cat) => {
-            const isActive = activeCategory === cat;
+          {(categories || []).map((cat) => {
+            const isActive = activeCategory === cat.name;
             return (
               <Pressable
-                key={cat}
+                key={cat.id}
                 style={[styles.tabItem, isActive && styles.activeTabItem]}
-                onPress={() => setActiveCategory(cat)}
+                onPress={() => setActiveCategory(cat.name)}
               >
-                <Text style={[styles.tabText, isActive && styles.activeTabText]}>{cat}</Text>
+                <Text style={[styles.tabText, isActive && styles.activeTabText]}>{cat.name}</Text>
               </Pressable>
             );
           })}
@@ -120,25 +158,29 @@ export default function RestaurantDetails() {
     </View>
   );
 
-  const renderItem = ({ item }: { item: typeof items[0] }) => (
+  const renderItem = ({ item }: { item: MenuItem }) => (
     <View style={styles.menuCard}>
       {item.isBestSeller && (
         <View style={styles.bestSellerBadge}>
           <Text style={styles.bestSellerText}>Best Seller</Text>
         </View>
       )}
-      <Image style={styles.menuImage} source={{ uri: item.image }} resizeMode="contain" />
+      <Image 
+        style={styles.menuImage} 
+        source={{ uri: item.image?.startsWith('http') ? item.image : `https://foodhub.tmc-innovations.com${item.image}` }} 
+        contentFit="contain" 
+      />
       
       <View style={styles.menuContent}>
         <View style={styles.menuTitleRow}>
           <Text style={styles.menuTitle} numberOfLines={1}>{item.title}</Text>
-          <Text style={styles.menuPrice}>${item.price.toFixed(2)}</Text>
+          <Text style={styles.menuPrice}>₱{Number(item.price).toFixed(2)}</Text>
         </View>
         <Text style={styles.menuDesc} numberOfLines={2}>{item.description}</Text>
         <View style={styles.menuBottom}>
           <MaterialCommunityIcons name="star" size={12} color="#F9A825" />
           <Text style={styles.itemRatingText}>
-            {item.rating} <Text style={styles.itemReviews}>({item.reviews.toLocaleString()})</Text>
+            {item.rating ?? 0} <Text style={styles.itemReviews}>({((item as any).reviews_count ?? item.reviews ?? 0).toLocaleString()})</Text>
           </Text>
         </View>
       </View>
@@ -153,8 +195,8 @@ export default function RestaurantDetails() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar style="dark" translucent backgroundColor="transparent" />
       <FlatList
-        data={items.filter(item => item.category === activeCategory)}
-        keyExtractor={(item) => item.id}
+        data={activeCategory && menu ? menu[activeCategory] || [] : []}
+        keyExtractor={(item) => String(item.id)}
         numColumns={2}
         columnWrapperStyle={styles.columnWrapper}
         contentContainerStyle={styles.listContent}

@@ -6,6 +6,7 @@ import {
   ScrollView,
   Pressable,
   FlatList,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -16,16 +17,17 @@ import { TmcLogo } from '@/components/tmc-logo';
 import { SectionHeader } from '@/components/home/section-header';
 import { OrderAgainCard } from '@/components/home/order-again-card';
 import { RestaurantCard } from '@/components/home/restaurant-card';
+import { useRestaurants } from '@/src/features/browse/api/useRestaurants';
 import {
   CUISINES,
   TOP_BRANDS,
   ORDER_AGAIN,
-  RESTAURANTS,
   FILTERS,
 } from '@/constants/mock-data';
 
 // ── Component ─────────────────────────────────────────────────
 export default function HomeScreen() {
+  const { data: restaurants, isLoading: isRestaurantsLoading } = useRestaurants();
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <StatusBar style="dark" translucent backgroundColor="transparent" />
@@ -123,9 +125,13 @@ export default function HomeScreen() {
           </ScrollView>
 
           {/* Restaurant Cards */}
-          {RESTAURANTS.map((restaurant) => (
-            <RestaurantCard key={restaurant.id} restaurant={restaurant} />
-          ))}
+          {isRestaurantsLoading ? (
+            <ActivityIndicator size="large" color="#AC1D10" style={{ marginTop: 40 }} />
+          ) : (
+            restaurants?.map((restaurant) => (
+              <RestaurantCard key={restaurant.id} restaurant={restaurant as any} />
+            ))
+          )}
         </Animated.View>
 
         {/* Bottom spacer */}
