@@ -1,9 +1,12 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { router, Stack, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import 'react-native-reanimated';
+
+const queryClient = new QueryClient();
 
 import { CartProvider } from '@/components/cart';
 import { PaymentProvider } from '@/components/payment';
@@ -69,16 +72,18 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <PaymentProvider>
-        <CartProvider>
-          <AuthProvider>
-            <RootStack />
-          </AuthProvider>
-        </CartProvider>
-      </PaymentProvider>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <PaymentProvider>
+          <CartProvider>
+            <AuthProvider>
+              <RootStack />
+            </AuthProvider>
+          </CartProvider>
+        </PaymentProvider>
+        <StatusBar style="auto" />
+      </ThemeProvider>
+    </QueryClientProvider>
   );
 }
 

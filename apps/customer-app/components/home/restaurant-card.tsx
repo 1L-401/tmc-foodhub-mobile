@@ -5,15 +5,20 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
 export type RestaurantItem = {
-  id: string;
-  name: string;
-  category: string;
-  rating: number;
-  reviews: number;
-  price: number;
-  time: string;
-  color: string;
-  accent: string;
+  id: string | number;
+  name?: string;
+  restaurant_name?: string;
+  cuisine_type?: string[];
+  rating?: number;
+  reviews_count?: number;
+  logo?: string | null;
+  // Fallbacks from mock data
+  category?: string;
+  reviews?: number;
+  price?: number;
+  time?: string;
+  color?: string;
+  accent?: string;
 };
 
 export function RestaurantCard({ restaurant }: { restaurant: RestaurantItem }) {
@@ -25,32 +30,34 @@ export function RestaurantCard({ restaurant }: { restaurant: RestaurantItem }) {
       onPress={() => router.push(`/restaurant/${restaurant.id}`)}
     >
       {/* Image area */}
-      <View style={[styles.restaurantImage, { backgroundColor: restaurant.color }]}>
+      <View style={[styles.restaurantImage, { backgroundColor: restaurant.color || '#F9F9F9' }]}>
         <MaterialCommunityIcons
           name="silverware-fork-knife"
           size={48}
-          color={restaurant.accent}
+          color={restaurant.accent || '#CCC'}
           style={{ opacity: 0.25 }}
         />
       </View>
       {/* Info */}
       <View style={styles.restaurantInfo}>
         <View style={styles.restaurantNameRow}>
-          <Text style={styles.restaurantName}>{restaurant.name}</Text>
+          <Text style={styles.restaurantName}>{restaurant.name || restaurant.restaurant_name}</Text>
           <View style={styles.ratingBadge}>
             <MaterialCommunityIcons name="star" size={12} color="#F9A825" />
             <Text style={styles.ratingText}>
-              {restaurant.rating} ({restaurant.reviews.toLocaleString()})
+              {restaurant.rating ?? 0} ({(restaurant.reviews_count ?? restaurant.reviews ?? 0).toLocaleString()})
             </Text>
           </View>
         </View>
-        <Text style={styles.restaurantCategory}>{restaurant.category}</Text>
+        <Text style={styles.restaurantCategory}>
+          {restaurant.cuisine_type?.length ? restaurant.cuisine_type.join(', ') : restaurant.category || 'Restaurant'}
+        </Text>
         <View style={styles.restaurantMeta}>
           <MaterialCommunityIcons name="bike-fast" size={14} color="#888" />
-          <Text style={styles.metaText}>₱{restaurant.price}</Text>
+          <Text style={styles.metaText}>₱{restaurant.price || 50}</Text>
           <Text style={styles.metaDot}>•</Text>
           <MaterialCommunityIcons name="clock-outline" size={14} color="#888" />
-          <Text style={styles.metaText}>{restaurant.time}</Text>
+          <Text style={styles.metaText}>{restaurant.time || '30-45 min'}</Text>
         </View>
       </View>
     </Pressable>
