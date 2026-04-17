@@ -4,13 +4,13 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  Image,
   Dimensions,
   TextInput,
   ScrollView,
   FlatList,
   ActivityIndicator,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -160,7 +160,7 @@ export default function RestaurantDetails() {
       <Image 
         style={styles.menuImage} 
         source={{ uri: item.image?.startsWith('http') ? item.image : `https://foodhub.tmc-innovations.com${item.image}` }} 
-        resizeMode="contain" 
+        contentFit="contain" 
       />
       
       <View style={styles.menuContent}>
