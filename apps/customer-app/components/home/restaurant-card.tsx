@@ -4,6 +4,8 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { useRouter } from 'expo-router';
 
+import { Image } from 'expo-image';
+
 export type RestaurantItem = {
   id: string | number;
   name?: string;
@@ -31,12 +33,20 @@ export function RestaurantCard({ restaurant }: { restaurant: RestaurantItem }) {
     >
       {/* Image area */}
       <View style={[styles.restaurantImage, { backgroundColor: restaurant.color || '#F9F9F9' }]}>
-        <MaterialCommunityIcons
-          name="silverware-fork-knife"
-          size={48}
-          color={restaurant.accent || '#CCC'}
-          style={{ opacity: 0.25 }}
-        />
+        {restaurant.logo ? (
+          <Image 
+            style={{ width: '100%', height: '100%' }}
+            source={{ uri: restaurant.logo?.startsWith('http') ? restaurant.logo : `https://foodhub.tmc-innovations.com${restaurant.logo}` }}
+            contentFit="cover"
+          />
+        ) : (
+          <MaterialCommunityIcons
+            name="silverware-fork-knife"
+            size={48}
+            color={restaurant.accent || '#CCC'}
+            style={{ opacity: 0.25 }}
+          />
+        )}
       </View>
       {/* Info */}
       <View style={styles.restaurantInfo}>

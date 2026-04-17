@@ -64,7 +64,15 @@ export default function RestaurantDetails() {
 
       {/* Logo */}
       <View style={styles.logoContainer}>
-        <Image style={styles.logo} source={{ uri: restaurant.logo }} />
+        {restaurant.logo ? (
+          <Image 
+            style={styles.logo} 
+            source={{ uri: restaurant.logo?.startsWith('http') ? restaurant.logo : `https://foodhub.tmc-innovations.com${restaurant.logo}` }} 
+            contentFit="cover"
+          />
+        ) : (
+          <MaterialCommunityIcons name="store" size={32} color="#CCC" />
+        )}
       </View>
 
       {/* Info */}
