@@ -24,9 +24,15 @@ const COLUMN_WIDTH = (width - 48) / 2; // 16 margin on sides + 16 gap
 export default function RestaurantDetails() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const [activeCategory, setActiveCategory] = useState('Popular');
+  const [activeCategory, setActiveCategory] = React.useState<string | null>(null);
 
   const { data: menuData, isLoading, isError } = useRestaurantMenu(id);
+
+  React.useEffect(() => {
+    if (menuData?.categories?.length && !activeCategory) {
+      setActiveCategory(menuData.categories[0].name);
+    }
+  }, [menuData, activeCategory]);
 
   if (isLoading || !menuData) {
     return (
@@ -47,7 +53,7 @@ export default function RestaurantDetails() {
     );
   }
 
-  const { restaurant, menuCategories, items } = menuData;
+  const { restaurant, categories, menu } = menuData;
 
   const renderHeader = () => (
     <View style={styles.headerContainer}>
@@ -124,15 +130,15 @@ export default function RestaurantDetails() {
       {/* Tabs */}
       <View style={styles.tabsWrapper}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {(menuCategories || []).map((cat) => {
-            const isActive = activeCategory === cat;
+          {(categories || []).map((cat) => {
+            const isActive = activeCategory === cat.name;
             return (
               <Pressable
-                key={cat}
+                key={cat.id}
                 style={[styles.tabItem, isActive && styles.activeTabItem]}
-                onPress={() => setActiveCategory(cat)}
+                onPress={() => setActiveCategory(cat.name)}
               >
-                <Text style={[styles.tabText, isActive && styles.activeTabText]}>{cat}</Text>
+                <Text style={[styles.tabText, isActive && styles.activeTabText]}>{cat.name}</Text>
               </Pressable>
             );
           })}
@@ -151,12 +157,16 @@ export default function RestaurantDetails() {
           <Text style={styles.bestSellerText}>Best Seller</Text>
         </View>
       )}
-      <Image style={styles.menuImage} source={{ uri: item.image }} resizeMode="contain" />
+      <Image 
+        style={styles.menuImage} 
+        source={{ uri: item.image?.startsWith('http') ? item.image : `https://foodhub.tmc-innovations.com${item.image}` }} 
+        resizeMode="contain" 
+      />
       
       <View style={styles.menuContent}>
         <View style={styles.menuTitleRow}>
           <Text style={styles.menuTitle} numberOfLines={1}>{item.title}</Text>
-          <Text style={styles.menuPrice}>${item.price.toFixed(2)}</Text>
+          <Text style={styles.menuPrice}>₱{Number(item.price).toFixed(2)}</Text>
         </View>
         <Text style={styles.menuDesc} numberOfLines={2}>{item.description}</Text>
         <View style={styles.menuBottom}>
@@ -177,7 +187,7 @@ export default function RestaurantDetails() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar style="dark" translucent backgroundColor="transparent" />
       <FlatList
-        data={(items || []).filter(item => item.category === activeCategory || !item.category)}
+        data={activeCategory && menu ? menu[activeCategory] || [] : []}
         keyExtractor={(item) => String(item.id)}
         numColumns={2}
         columnWrapperStyle={styles.columnWrapper}
