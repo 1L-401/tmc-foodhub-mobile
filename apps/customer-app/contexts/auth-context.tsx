@@ -1,11 +1,49 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { Platform } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
 
-const LOGIN_URL = 'https://foodhub.tmc-innovations.com/api/login';
-const REGISTER_URL = 'https://foodhub.tmc-innovations.com/api/register';
-const OWNER_REGISTER_URL = 'https://foodhub.tmc-innovations.com/api/owner/register';
-const GOOGLE_SIGNUP_URL = 'https://foodhub.tmc-innovations.com/api/auth/google-signup';
-const SEND_OTP_URL = 'https://foodhub.tmc-innovations.com/api/send-otp';
-const OWNER_SEND_OTP_URL = 'https://foodhub.tmc-innovations.com/api/owner/send-otp';
+const API_BASE_URL = Platform.OS === 'web' 
+  ? 'https://foodhub.tmc-innovations.com/api' 
+  : 'https://foodhub.tmc-innovations.com/api';
+
+const LOGIN_URL = `${API_BASE_URL}/login`;
+const REGISTER_URL = `${API_BASE_URL}/register`;
+const OWNER_REGISTER_URL = `${API_BASE_URL}/owner/register`;
+const GOOGLE_SIGNUP_URL = `${API_BASE_URL}/auth/google-signup`;
+const SEND_OTP_URL = `${API_BASE_URL}/send-otp`;
+const OWNER_SEND_OTP_URL = `${API_BASE_URL}/owner/send-otp`;
+
+const setStoredAuth = async (token: string, user: AuthUser | null) => {
+  try {
+    if (Platform.OS === 'web') {
+      localStorage.setItem('auth_token', token);
+      if (user) {
+        localStorage.setItem('auth_user', JSON.stringify(user));
+      }
+    } else {
+      await SecureStore.setItemAsync('auth_token', token);
+      if (user) {
+        await SecureStore.setItemAsync('auth_user', JSON.stringify(user));
+      }
+    }
+  } catch (e) {
+    console.error('Failed to store auth data', e);
+  }
+};
+
+const clearStoredAuth = async () => {
+  try {
+    if (Platform.OS === 'web') {
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('auth_user');
+    } else {
+      await SecureStore.deleteItemAsync('auth_token');
+      await SecureStore.deleteItemAsync('auth_user');
+    }
+  } catch (e) {
+    console.error('Failed to clear auth data', e);
+  }
+};
 
 type AuthUser = {
   id: number;
@@ -203,8 +241,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    // Session persistence can be layered in here later (e.g. secure storage hydration).
-    setIsReady(true);
+    async function loadStoredAuth() {
+      try {
+        let storedToken = null;
+        let storedUser = null;
+
+        if (Platform.OS === 'web') {
+          storedToken = localStorage.getItem('auth_token');
+          const userStr = localStorage.getItem('auth_user');
+          if (userStr) {
+            try {
+               storedUser = JSON.parse(userStr);
+            } catch (e) {}
+          }
+        } else {
+          storedToken = await SecureStore.getItemAsync('auth_token');
+          const userStr = await SecureStore.getItemAsync('auth_user');
+          if (userStr) {
+             try {
+               storedUser = JSON.parse(userStr);
+             } catch (e) {}
+          }
+        }
+
+        if (storedToken) {
+          setToken(storedToken);
+          if (storedUser) {
+            setUser(storedUser);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load auth data', e);
+      } finally {
+        setIsReady(true);
+      }
+    }
+
+    loadStoredAuth();
   }, []);
 
   const postJson = useCallback(async (url: string, body: Record<string, unknown>) => {
@@ -247,7 +320,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const applyAuthPayload = useCallback((payload: unknown) => {
+  const applyAuthPayload = useCallback(async (payload: unknown) => {
     const parsed = parseAuthResponse(payload);
 
     if (!parsed) {
@@ -256,6 +329,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     setToken(parsed.token);
     setUser(parsed.user);
+    await setStoredAuth(parsed.token, parsed.user);
     return true;
   }, []);
 
@@ -270,7 +344,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
-      if (!applyAuthPayload(result.payload)) {
+      const applied = await applyAuthPayload(result.payload);
+      if (!applied) {
         return {
           success: false,
           error: 'Login response is missing a valid token. Please try again.',
@@ -300,9 +375,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
+      const applied = await applyAuthPayload(result.payload);
       return {
         success: true,
-        authenticated: applyAuthPayload(result.payload),
+        authenticated: applied,
       };
     } catch {
       return {
@@ -323,9 +399,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
+      const applied = await applyAuthPayload(result.payload);
       return {
         success: true,
-        authenticated: applyAuthPayload(result.payload),
+        authenticated: applied,
       };
     } catch {
       return {
@@ -383,9 +460,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
+      const applied = await applyAuthPayload(result.payload);
       return {
         success: true,
-        authenticated: applyAuthPayload(result.payload),
+        authenticated: applied,
       };
     } catch {
       return {
@@ -398,6 +476,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = useCallback(async () => {
     setToken(null);
     setUser(null);
+    await clearStoredAuth();
   }, []);
 
   const value = useMemo<AuthContextValue>(
