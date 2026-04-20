@@ -2,48 +2,15 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 
-const API_BASE_URL = Platform.OS === 'web' 
-  ? 'https://foodhub.tmc-innovations.com/api' 
-  : 'https://foodhub.tmc-innovations.com/api';
-
-const LOGIN_URL = `${API_BASE_URL}/login`;
-const REGISTER_URL = `${API_BASE_URL}/register`;
-const OWNER_REGISTER_URL = `${API_BASE_URL}/owner/register`;
-const GOOGLE_SIGNUP_URL = `${API_BASE_URL}/auth/google-signup`;
-const SEND_OTP_URL = `${API_BASE_URL}/send-otp`;
-const OWNER_SEND_OTP_URL = `${API_BASE_URL}/owner/send-otp`;
-
-const setStoredAuth = async (token: string, user: AuthUser | null) => {
-  try {
-    if (Platform.OS === 'web') {
-      localStorage.setItem('auth_token', token);
-      if (user) {
-        localStorage.setItem('auth_user', JSON.stringify(user));
-      }
-    } else {
-      await SecureStore.setItemAsync('auth_token', token);
-      if (user) {
-        await SecureStore.setItemAsync('auth_user', JSON.stringify(user));
-      }
-    }
-  } catch (e) {
-    console.error('Failed to store auth data', e);
-  }
-};
-
-const clearStoredAuth = async () => {
-  try {
-    if (Platform.OS === 'web') {
-      localStorage.removeItem('auth_token');
-      localStorage.removeItem('auth_user');
-    } else {
-      await SecureStore.deleteItemAsync('auth_token');
-      await SecureStore.deleteItemAsync('auth_user');
-    }
-  } catch (e) {
-    console.error('Failed to clear auth data', e);
-  }
-};
+const LOGIN_URL = 'https://foodhub.tmc-innovations.com/api/login';
+const REGISTER_URL = 'https://foodhub.tmc-innovations.com/api/register';
+const OWNER_REGISTER_URL = 'https://foodhub.tmc-innovations.com/api/owner/register';
+const GOOGLE_SIGNUP_URL = 'https://foodhub.tmc-innovations.com/api/auth/google-signup';
+const SEND_OTP_URL = 'https://foodhub.tmc-innovations.com/api/send-otp';
+const OWNER_SEND_OTP_URL = 'https://foodhub.tmc-innovations.com/api/owner/send-otp';
+const FORGOT_PASSWORD_URL = 'https://foodhub.tmc-innovations.com/api/forgot-password';
+const VERIFY_RESET_OTP_URL = 'https://foodhub.tmc-innovations.com/api/verify-reset-otp';
+const RESET_PASSWORD_URL = 'https://foodhub.tmc-innovations.com/api/reset-password';
 
 type AuthUser = {
   id: number;
@@ -63,6 +30,37 @@ type AuthActionResult =
     };
 
 type OtpActionResult =
+  | {
+      success: true;
+      message: string;
+    }
+  | {
+      success: false;
+      error: string;
+    };
+
+type PasswordResetRequestResult =
+  | {
+      success: true;
+      message: string;
+    }
+  | {
+      success: false;
+      error: string;
+    };
+
+type PasswordResetVerificationResult =
+  | {
+      success: true;
+      message: string;
+      resetToken: string;
+    }
+  | {
+      success: false;
+      error: string;
+    };
+
+type PasswordResetCompletionResult =
   | {
       success: true;
       message: string;
@@ -113,6 +111,13 @@ type AuthContextValue = {
   signUpCustomer: (payload: CustomerSignupPayload) => Promise<AuthActionResult>;
   signUpOwner: (payload: OwnerSignupPayload) => Promise<AuthActionResult>;
   sendSignupOtp: (email: string, userType: 'customer' | 'partner') => Promise<OtpActionResult>;
+  requestPasswordReset: (email: string) => Promise<PasswordResetRequestResult>;
+  verifyPasswordResetOtp: (email: string, otp: string) => Promise<PasswordResetVerificationResult>;
+  resetPasswordWithToken: (
+    resetToken: string,
+    password: string,
+    passwordConfirmation: string,
+  ) => Promise<PasswordResetCompletionResult>;
   signUpWithGoogleCredential: (credential: string) => Promise<AuthActionResult>;
   signOut: () => Promise<void>;
 };
@@ -235,6 +240,63 @@ function parseResponseBody(responseBody: string): unknown {
   }
 }
 
+function parseRetryAfterSeconds(rawValue: string | null): number | null {
+  if (!rawValue) {
+    return null;
+  }
+
+  const secondsValue = Number(rawValue);
+
+  if (Number.isFinite(secondsValue) && secondsValue > 0) {
+    return Math.ceil(secondsValue);
+  }
+
+  const dateValue = Date.parse(rawValue);
+
+  if (Number.isNaN(dateValue)) {
+    return null;
+  }
+
+  const deltaSeconds = Math.ceil((dateValue - Date.now()) / 1000);
+  return deltaSeconds > 0 ? deltaSeconds : null;
+}
+
+function formatThrottleMessage(payload: unknown, retryAfterSeconds: number | null): string {
+  const serverMessage = getServerErrorMessage(payload);
+
+  if (serverMessage && serverMessage !== 'Too Many Attempts.') {
+    return serverMessage;
+  }
+
+  if (retryAfterSeconds) {
+    return `Too many attempts. Please try again in ${retryAfterSeconds} seconds.`;
+  }
+
+  return 'Too many attempts. Please try again shortly.';
+}
+
+function parseResetVerificationPayload(payload: unknown): { message: string | null; resetToken: string | null } {
+  if (typeof payload !== 'object' || payload === null) {
+    return {
+      message: null,
+      resetToken: null,
+    };
+  }
+
+  const candidate = payload as {
+    message?: unknown;
+    reset_token?: unknown;
+  };
+
+  return {
+    message: typeof candidate.message === 'string' && candidate.message.trim() ? candidate.message : null,
+    resetToken:
+      typeof candidate.reset_token === 'string' && candidate.reset_token.trim()
+        ? candidate.reset_token
+        : null,
+  };
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -294,6 +356,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return {
       ok: response.ok,
+      status: response.status,
+      retryAfterSeconds: parseRetryAfterSeconds(response.headers.get('Retry-After')),
       payload: parseResponseBody(responseBody),
     };
   }, []);
@@ -316,6 +380,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return {
       ok: response.ok,
+      status: response.status,
+      retryAfterSeconds: parseRetryAfterSeconds(response.headers.get('Retry-After')),
       payload: parseResponseBody(responseBody),
     };
   }, []);
@@ -431,6 +497,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const result = await postForm(endpoint, { email: normalizedEmail });
 
       if (!result.ok) {
+        if (result.status === 429) {
+          return {
+            success: false,
+            error: formatThrottleMessage(result.payload, result.retryAfterSeconds),
+          };
+        }
+
         return {
           success: false,
           error: getServerErrorMessage(result.payload) ?? 'Unable to send OTP right now. Please try again.',
@@ -448,6 +521,168 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
     }
   }, [postForm]);
+
+  const requestPasswordReset = useCallback(async (email: string): Promise<PasswordResetRequestResult> => {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail) {
+      return {
+        success: false,
+        error: 'Please enter your email first.',
+      };
+    }
+
+    try {
+      const result = await postJson(FORGOT_PASSWORD_URL, { email: normalizedEmail });
+
+      if (!result.ok) {
+        if (result.status === 429) {
+          return {
+            success: false,
+            error: formatThrottleMessage(result.payload, result.retryAfterSeconds),
+          };
+        }
+
+        return {
+          success: false,
+          error: getServerErrorMessage(result.payload) ?? 'Unable to request a reset code right now. Please try again.',
+        };
+      }
+
+      return {
+        success: true,
+        message:
+          getServerErrorMessage(result.payload) ??
+          'If an account with that email exists, a reset code has been sent.',
+      };
+    } catch {
+      return {
+        success: false,
+        error: 'Unable to connect to the server. Please try again.',
+      };
+    }
+  }, [postJson]);
+
+  const verifyPasswordResetOtp = useCallback(async (
+    email: string,
+    otp: string,
+  ): Promise<PasswordResetVerificationResult> => {
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedOtp = otp.trim();
+
+    if (!normalizedEmail) {
+      return {
+        success: false,
+        error: 'Missing email. Please go back and request a new reset code.',
+      };
+    }
+
+    if (!normalizedOtp) {
+      return {
+        success: false,
+        error: 'Please enter your reset code.',
+      };
+    }
+
+    try {
+      const result = await postJson(VERIFY_RESET_OTP_URL, {
+        email: normalizedEmail,
+        otp: normalizedOtp,
+      });
+
+      if (!result.ok) {
+        if (result.status === 429) {
+          return {
+            success: false,
+            error: formatThrottleMessage(result.payload, result.retryAfterSeconds),
+          };
+        }
+
+        return {
+          success: false,
+          error:
+            getServerErrorMessage(result.payload) ??
+            'Invalid or expired reset code. Please try again or request a new code.',
+        };
+      }
+
+      const parsedPayload = parseResetVerificationPayload(result.payload);
+
+      if (!parsedPayload.resetToken) {
+        return {
+          success: false,
+          error: 'Unable to verify code right now. Please request a new code and try again.',
+        };
+      }
+
+      return {
+        success: true,
+        message: parsedPayload.message ?? 'Reset code verified successfully.',
+        resetToken: parsedPayload.resetToken,
+      };
+    } catch {
+      return {
+        success: false,
+        error: 'Unable to connect to the server. Please try again.',
+      };
+    }
+  }, [postJson]);
+
+  const resetPasswordWithToken = useCallback(async (
+    resetToken: string,
+    password: string,
+    passwordConfirmation: string,
+  ): Promise<PasswordResetCompletionResult> => {
+    if (!resetToken) {
+      return {
+        success: false,
+        error: 'Invalid reset token. Please start the process again.',
+      };
+    }
+
+    if (!password || !passwordConfirmation) {
+      return {
+        success: false,
+        error: 'Please enter and confirm your new password.',
+      };
+    }
+
+    try {
+      const result = await postJson(RESET_PASSWORD_URL, {
+        reset_token: resetToken,
+        password,
+        password_confirmation: passwordConfirmation,
+      });
+
+      if (!result.ok) {
+        if (result.status === 429) {
+          return {
+            success: false,
+            error: formatThrottleMessage(result.payload, result.retryAfterSeconds),
+          };
+        }
+
+        return {
+          success: false,
+          error:
+            getServerErrorMessage(result.payload) ??
+            'Unable to reset password. Please verify your details and try again.',
+        };
+      }
+
+      return {
+        success: true,
+        message:
+          getServerErrorMessage(result.payload) ??
+          'Password reset successfully. Please log in with your new password.',
+      };
+    } catch {
+      return {
+        success: false,
+        error: 'Unable to connect to the server. Please try again.',
+      };
+    }
+  }, [postJson]);
 
   const signUpWithGoogleCredential = useCallback(async (credential: string): Promise<AuthActionResult> => {
     try {
@@ -489,6 +724,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signUpCustomer,
       signUpOwner,
       sendSignupOtp,
+      requestPasswordReset,
+      verifyPasswordResetOtp,
+      resetPasswordWithToken,
       signUpWithGoogleCredential,
       signOut,
     }),
@@ -500,6 +738,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signUpCustomer,
       signUpOwner,
       sendSignupOtp,
+      requestPasswordReset,
+      verifyPasswordResetOtp,
+      resetPasswordWithToken,
       signUpWithGoogleCredential,
       signOut,
     ],

@@ -16,26 +16,33 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { TmcLogo } from '@/components/tmc-logo';
+import { useAuth } from '@/contexts/auth-context';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function ForgotPasswordScreen() {
+  const { requestPasswordReset } = useAuth();
   const [email, setEmail] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleEmailChange = (value: string) => {
     setEmail(value);
 
     if (errorMessage) {
-      setErrorMessage('');
+      setErrorMessage(null);
     }
   };
 
-  const handleSendResetLink = () => {
+  const handleSendResetCode = async () => {
+    if (isSubmitting) {
+      return;
+    }
+
     const normalizedEmail = email.trim().toLowerCase();
 
     if (!normalizedEmail) {
-      setErrorMessage('Email is required.');
+      setErrorMessage('Please enter your email address.');
       return;
     }
 
@@ -44,8 +51,22 @@ export default function ForgotPasswordScreen() {
       return;
     }
 
-    setErrorMessage('');
-    router.push('/(auth)/verify-code');
+    setErrorMessage(null);
+    setIsSubmitting(true);
+
+    const result = await requestPasswordReset(normalizedEmail);
+
+    setIsSubmitting(false);
+
+    if (!result.success) {
+      setErrorMessage(result.error);
+      return;
+    }
+
+    router.push({
+      pathname: '/(auth)/verify-code',
+      params: { email: normalizedEmail },
+    });
   };
 
   return (
@@ -69,7 +90,7 @@ export default function ForgotPasswordScreen() {
           <Animated.View entering={FadeInDown.delay(120).springify()} style={styles.titleSection}>
             <Text style={styles.title}>Forgot Password?</Text>
             <Text style={styles.subtitle}>
-              Enter your email address and we&apos;ll send you a link to reset your password.
+              Enter your email address and we&apos;ll send you a 6-digit reset code.
             </Text>
           </Animated.View>
 
@@ -95,15 +116,24 @@ export default function ForgotPasswordScreen() {
                   value={email}
                   onChangeText={handleEmailChange}
                   returnKeyType="done"
-                  onSubmitEditing={handleSendResetLink}
+                  onSubmitEditing={() => {
+                    void handleSendResetCode();
+                  }}
                 />
               </View>
             </View>
 
             {!!errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
 
-            <Pressable style={styles.submitButton} onPress={handleSendResetLink}>
-              <Text style={styles.submitButtonText}>Send Reset Link</Text>
+            <Pressable
+              style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
+              onPress={() => {
+                void handleSendResetCode();
+              }}
+              disabled={isSubmitting}>
+              <Text style={styles.submitButtonText}>
+                {isSubmitting ? 'Sending Code...' : 'Send Reset Code'}
+              </Text>
             </Pressable>
           </Animated.View>
         </ScrollView>
@@ -196,6 +226,9 @@ const styles = StyleSheet.create({
     height: 42,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  submitButtonDisabled: {
+    opacity: 0.7,
   },
   submitButtonText: {
     color: '#FFFFFF',
