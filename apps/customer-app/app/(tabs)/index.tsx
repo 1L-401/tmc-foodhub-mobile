@@ -7,11 +7,20 @@ import {
   Pressable,
   FlatList,
   ActivityIndicator,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, {
+  FadeInDown,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
+import { Image } from 'expo-image';
 
 import { TmcLogo } from '@/components/tmc-logo';
 import { SectionHeader } from '@/components/home/section-header';
@@ -28,25 +37,67 @@ import {
 // ── Component ─────────────────────────────────────────────────
 export default function HomeScreen() {
   const { data: restaurants, isLoading: isRestaurantsLoading } = useRestaurants();
+
+  const headerScale = useSharedValue(0.95);
+  const headerOpacity = useSharedValue(0);
+
+  React.useEffect(() => {
+    headerOpacity.value = withTiming(1, { duration: 600 });
+    headerScale.value = withDelay(100, withSpring(1, { damping: 12 }));
+  }, []);
+
+  const headerAnim = useAnimatedStyle(() => ({
+    opacity: headerOpacity.value,
+    transform: [{ scale: headerScale.value }],
+  }));
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <StatusBar style="dark" translucent backgroundColor="transparent" />
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* ─── Top Bar ─── */}
-        <Animated.View entering={FadeInDown.delay(50).springify()} style={styles.topBar}>
-          <TmcLogo width={40} height={40} />
-          <View style={styles.searchBar}>
-            <MaterialCommunityIcons name="magnify" size={20} color="#999" />
-            <Text style={styles.searchPlaceholder}>Search for restaurants, cuisines, o...</Text>
-          </View>
-          <Pressable style={styles.notifButton}>
-            <MaterialCommunityIcons name="bell-outline" size={24} color="#1A1A1A" />
+      <View style={styles.container}>
+        {/* ── Top Bar ── */}
+        <Animated.View style={[styles.topBar, headerAnim]}>
+          <Pressable style={{ opacity: 1 }}>
+            <MaterialCommunityIcons name="menu" size={24} color="#1A1A1A" />
           </Pressable>
+
+          <View style={styles.logoWrap}>
+            <View style={styles.logoIcon}>
+              <Text style={styles.logoText}>TMC</Text>
+            </View>
+            <Text style={styles.logoTitle}>
+              FOOD{'\n'}
+              <Text style={styles.logoBold}>HUB</Text>
+            </Text>
+          </View>
+
+          <View style={styles.topBarRight}>
+            <Pressable style={styles.avatarWrap}>
+              <MaterialCommunityIcons
+                name="bell-badge-outline"
+                size={22}
+                color="#AC1D10"
+              />
+            </Pressable>
+          </View>
         </Animated.View>
+
+        {/* ── Search ── */}
+        <Animated.View
+          entering={FadeInDown.delay(200).duration(400)}
+          style={styles.searchWrap}>
+          <MaterialCommunityIcons name="magnify" size={18} color="#AAA" />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search restaurants, cuisines..."
+            placeholderTextColor="#AAA"
+          />
+        </Animated.View>
+
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
 
         {/* ─── Cuisines ─── */}
         <Animated.View entering={FadeInDown.delay(100).springify()}>
@@ -137,6 +188,7 @@ export default function HomeScreen() {
         {/* Bottom spacer */}
         <View style={{ height: 80 }} />
       </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
@@ -145,7 +197,10 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8F8F8',
+  },
+  container: {
+    flex: 1,
   },
   scrollView: {
     flex: 1,
@@ -156,34 +211,46 @@ const styles = StyleSheet.create({
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 10,
+    paddingVertical: 8,
   },
-  searchBar: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F5F5F5',
-    borderRadius: 24,
-    paddingHorizontal: 14,
-    height: 42,
-    gap: 8,
-  },
-  searchPlaceholder: {
-    fontSize: 14,
-    color: '#999',
-    flex: 1,
-  },
-  notifButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+  logoWrap: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  logoIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: '#AC1D10',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#EFEFEF',
   },
+  logoText: { color: '#FFF', fontSize: 8, fontWeight: '900' },
+  logoTitle: { fontSize: 8, color: '#1A1A1A', fontWeight: '500', lineHeight: 10 },
+  logoBold: { fontWeight: '900', color: '#AC1D10' },
+  topBarRight: { flexDirection: 'row', alignItems: 'center' },
+  avatarWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FBE7E4',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchWrap: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    marginTop: 4,
+    height: 40,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    backgroundColor: '#FFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    gap: 8,
+  },
+  searchInput: { flex: 1, fontSize: 13, color: '#1A1A1A' },
   horizontalList: {
     paddingHorizontal: 16,
     gap: 16,

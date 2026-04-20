@@ -94,9 +94,9 @@ export default function CartScreen() {
           contentContainerStyle={styles.scrollContent}>
           {/* Delivery address card with map */}
           <DeliveryAddress
-            label={`Delivering to ${selectedAddress.label}`}
-            address={selectedAddress.fullAddress}
-            onChangePress={handleChangeAddress}
+              label={`Delivering to ${selectedAddress.label}`}
+              address={selectedAddress.fullAddress}
+              onChangePress={handleChangeAddress}
           />
 
           {/* My Cart heading */}
@@ -131,18 +131,20 @@ export default function CartScreen() {
           </View>
 
           {/* Complete Your Meal */}
-          <Text style={styles.completeTitle}>Complete Your Meal</Text>
+          <View>
+            <Text style={styles.completeTitle}>Complete Your Meal</Text>
 
-          <FlatList
-            horizontal
-            data={MOCK_ADD_ONS}
-            keyExtractor={(item) => item.id}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.addOnList}
-            renderItem={({ item }) => (
-              <AddOnCard item={item} onAdd={() => {}} />
-            )}
-          />
+            <FlatList
+              horizontal
+              data={MOCK_ADD_ONS}
+              keyExtractor={(item) => item.id}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.addOnList}
+              renderItem={({ item }) => (
+                <AddOnCard item={item} onAdd={() => {}} />
+              )}
+            />
+          </View>
 
           {/* Spacer so content doesn't hide behind the bottom sheet */}
           <View style={styles.bottomSpacer} />
