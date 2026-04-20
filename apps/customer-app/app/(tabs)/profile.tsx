@@ -1,198 +1,139 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import React, { useCallback, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import React from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-import { SettingsRow } from '@/components/settings/settings-row';
-import { SettingsSection } from '@/components/settings/settings-section';
-import { useAuth } from '@/contexts/auth-context';
-
-function getInitials(name: string) {
-  const parts = name
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-
-  if (parts.length === 0) {
-    return 'JD';
-  }
-
-  const first = parts[0]?.[0] ?? '';
-  const second = parts.length > 1 ? parts[parts.length - 1]?.[0] ?? '' : '';
-
-  if (!second) {
-    return `${first}${first}`.toUpperCase();
-  }
-
-  return `${first}${second}`.toUpperCase();
-}
+import { TmcLogo } from '@/components/tmc-logo';
 
 export default function ProfileScreen() {
-  const { user, signOut } = useAuth();
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const [isDarkModeEnabled, setIsDarkModeEnabled] = useState(false);
-
-  const displayName = user?.name?.trim() ? user.name : 'John Doe';
-  const displayEmail = user?.email?.trim() ? user.email : 'john.doe@gmail.com';
-
-  const initials = useMemo(() => getInitials(displayName), [displayName]);
-
-  const handleMenuPress = useCallback(() => {
-    router.push('/(tabs)');
-  }, []);
-
-  const handleOpenAccount = useCallback(() => {
-    router.push('/account-settings');
-  }, []);
-
-  const handleOpenPrivacy = useCallback(() => {
-    router.push('/privacy-security');
-  }, []);
-
-  const handleOpenAddresses = useCallback(() => {
-    router.push('/delivery-address');
-  }, []);
-
-  const handleOpenPaymentMethods = useCallback(() => {
-    router.push('/add-payment-method');
-  }, []);
-
-  const handleOpenNotifications = useCallback(() => {
-    router.push('/notification-settings');
-  }, []);
-
-  const handleOpenTerms = useCallback(() => {
-    router.push('/terms-policies');
-  }, []);
-
-  const handleOpenHelp = useCallback(() => {
-    router.push('/help-support');
-  }, []);
-
-  const handleToggleDarkMode = useCallback((nextValue: boolean) => {
-    setIsDarkModeEnabled(nextValue);
-  }, []);
-
-  const handleLogout = useCallback(async () => {
-    if (isLoggingOut) {
-      return;
-    }
-
-    setIsLoggingOut(true);
-    try {
-      await signOut();
-      setIsLoggingOut(false);
-      router.replace('/(auth)/login');
-    } catch {
-      setIsLoggingOut(false);
-    }
-  }, [isLoggingOut, signOut]);
-
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-      <View style={styles.container}>
-        <View style={styles.topRow}>
-          <Pressable
-            style={({ pressed }) => [styles.menuButton, pressed && styles.pressed]}
-            onPress={handleMenuPress}>
-            <MaterialCommunityIcons name="menu" size={24} color="#1A1A1A" />
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      {/* ── Top Header ── */}
+      <View style={styles.header}>
+        <View style={styles.logoCircle}>
+          <TmcLogo width={36} height={36} />
+        </View>
+        <Pressable style={styles.settingsBtn} onPress={() => router.push('/account-settings')}>
+          <MaterialCommunityIcons name="cog-outline" size={20} color="#1A1A1A" />
+        </Pressable>
+      </View>
+
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        
+        {/* ── Profile Info ── */}
+        <View style={styles.profileSection}>
+          <Image
+            source={{ uri: 'https://i.pravatar.cc/150?u=johndoe' }}
+            style={styles.avatar}
+          />
+          <Text style={styles.name}>John Doe</Text>
+          <Text style={styles.email}>john.doe@email.com</Text>
+          <Pressable style={styles.editBtn}>
+            <Text style={styles.editBtnText}>Edit Profile</Text>
           </Pressable>
         </View>
 
-        <Text style={styles.title}>Settings</Text>
-
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}>
-          <View style={styles.profileBlock}>
-            <View style={styles.avatarWrap}>
-              <Text style={styles.avatarText}>{initials}</Text>
-            </View>
-            <View style={styles.profileTextWrap}>
-              <Text style={styles.profileName}>{displayName}</Text>
-              <Text style={styles.profileEmail}>{displayEmail}</Text>
-            </View>
+        {/* ── Stats Row ── */}
+        <View style={styles.statsRow}>
+          <View style={styles.statCol}>
+            <Text style={styles.statVal}>24</Text>
+            <Text style={styles.statLabel}>Orders</Text>
           </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statCol}>
+            <Text style={styles.statVal}>$1,250</Text>
+            <Text style={styles.statLabel}>Spent</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statCol}>
+            <Text style={styles.statVal}>850</Text>
+            <Text style={styles.statLabel}>Points</Text>
+          </View>
+        </View>
 
-          <SettingsSection title="Account">
-            <SettingsRow
-              icon="account-circle-outline"
-              label="Account"
-              onPress={handleOpenAccount}
-              showDivider
-            />
-            <SettingsRow
-              icon="shield-lock-outline"
-              label="Privacy & Security"
-              onPress={handleOpenPrivacy}
-              showDivider
-            />
-            <SettingsRow
-              icon="home-outline"
-              label="Addresses"
-              onPress={handleOpenAddresses}
-              showDivider
-            />
-            <SettingsRow
-              icon="credit-card-outline"
-              label="Payment Methods"
-              onPress={handleOpenPaymentMethods}
-            />
-          </SettingsSection>
-
-          <SettingsSection title="Preferences">
-            <SettingsRow
-              icon="weather-night"
-              label="Dark Mode"
-              trailing={
-                <Switch
-                  value={isDarkModeEnabled}
-                  onValueChange={handleToggleDarkMode}
-                  trackColor={{ false: '#CECECE', true: '#D9A8A2' }}
-                  thumbColor={isDarkModeEnabled ? '#952011' : '#FFFFFF'}
-                  ios_backgroundColor="#CECECE"
-                />
-              }
-              indicator="none"
-              showDivider
-            />
-            <SettingsRow
-              icon="bell-outline"
-              label="Notifications"
-              onPress={handleOpenNotifications}
-            />
-          </SettingsSection>
-
-          <SettingsSection title="Privacy & Support">
-            <SettingsRow
-              icon="file-document-outline"
-              label="Terms & Policies"
-              onPress={handleOpenTerms}
-              indicator="external"
-              showDivider
-            />
-            <SettingsRow
-              icon="headset"
-              label="Help & Support"
-              onPress={handleOpenHelp}
-            />
-          </SettingsSection>
-
-          <Pressable
-            style={({ pressed }) => [
-              styles.signOutButton,
-              pressed && styles.pressed,
-              isLoggingOut && styles.signOutButtonDisabled,
-            ]}
-            onPress={handleLogout}
-            disabled={isLoggingOut}>
-            <Text style={styles.signOutText}>
-              {isLoggingOut ? 'Signing out...' : 'Sign out'}
-            </Text>
+        {/* ── Recent Orders ── */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Recent Orders</Text>
+          <Pressable>
+            <Text style={styles.sectionAction}>View History</Text>
           </Pressable>
-        </ScrollView>
-      </View>
+        </View>
+        
+        <View style={styles.orderCard}>
+          <Image 
+            source={{ uri: 'https://images.unsplash.com/photo-1600891964092-4316c288032e?auto=format&fit=crop&w=200&q=80' }} 
+            style={styles.orderImg} 
+          />
+          <View style={styles.orderMiddle}>
+            <Text style={styles.orderTitle}>Grilled Steak</Text>
+            <Text style={styles.orderSub}>Delivered • 2 items • $12.00</Text>
+            <Text style={styles.orderTime}>Yesterday</Text>
+          </View>
+          <Pressable style={styles.reorderBtn}>
+            <Text style={styles.reorderText}>Reorder</Text>
+          </Pressable>
+          <MaterialCommunityIcons name="chevron-right" size={20} color="#AAA" style={{ marginLeft: 6 }} />
+        </View>
+
+        {/* ── Vouchers ── */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Vouchers</Text>
+          <Pressable>
+            <Text style={styles.sectionAction}>See All</Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.voucherCard}>
+          <View style={styles.voucherIconWrap}>
+            <MaterialCommunityIcons name="ticket-percent-outline" size={24} color="#F59E0B" />
+          </View>
+          <View style={styles.voucherBody}>
+            <View style={styles.limitedPill}>
+              <Text style={styles.limitedText}>LIMITED TIME</Text>
+            </View>
+            <Text style={styles.voucherTitle}>15% OFF</Text>
+            <Text style={styles.voucherSub}>Next Order • Code: CURATOR15</Text>
+          </View>
+        </View>
+
+        {/* ── Addresses & Payment ── */}
+        <View style={styles.twoColRow}>
+          <Pressable style={styles.gridCard}>
+            <View style={styles.gridIconWrap}>
+              <MaterialCommunityIcons name="home" size={20} color="#AC1D10" />
+            </View>
+            <Text style={styles.gridSectionLabel}>HOME ADDRESS</Text>
+            <Text style={styles.gridTitle} numberOfLines={1}>123 Quezon Avenue</Text>
+            <Text style={styles.gridSub} numberOfLines={1}>Unit 4B, Brgy. South Trian...</Text>
+          </Pressable>
+
+          <Pressable style={styles.gridCard}>
+            <View style={styles.gridIconWrap}>
+              <MaterialCommunityIcons name="wallet" size={20} color="#AC1D10" />
+            </View>
+            <Text style={styles.gridSectionLabel}>PAYMENT METHOD</Text>
+            <Text style={styles.gridTitle}>GCash</Text>
+            <Text style={styles.gridSub}>+63 1234 56780</Text>
+          </Pressable>
+        </View>
+
+        {/* ── Share Banner ── */}
+        <View style={styles.banner}>
+          {/* Faint background icons */}
+          <MaterialCommunityIcons name="silverware-fork-knife" size={140} color="rgba(255,255,255,0.05)" style={styles.bgIconLeft} />
+          <MaterialCommunityIcons name="gift-outline" size={100} color="rgba(255,255,255,0.06)" style={styles.bgIconRight} />
+
+          <MaterialCommunityIcons name="silverware-fork-knife" size={18} color="#F59E0B" />
+          <Text style={styles.bannerTitle}>Share the Love, Get $10 Credit</Text>
+          <Text style={styles.bannerSub}>Invite your friends to TMC FoodHub and you both get rewarded.</Text>
+          <Pressable style={styles.bannerBtn}>
+            <Text style={styles.bannerBtnText}>Invite Friends</Text>
+          </Pressable>
+        </View>
+
+        <View style={{ height: 40 }} />
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -200,83 +141,306 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F8F8F8',
+    backgroundColor: '#FFFFFF',
   },
-  container: {
-    flex: 1,
-    paddingHorizontal: 20,
-  },
-  pressed: {
-    opacity: 0.75,
-  },
-  topRow: {
-    marginTop: 8,
-    marginBottom: 8,
-  },
-  menuButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: 38,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 16,
-  },
-  scrollContent: {
-    paddingBottom: 24,
-  },
-  profileBlock: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    marginBottom: 16,
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
   },
-  avatarWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#CCCCCC',
+  logoCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#EFEFEF',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: {
-    color: '#3D3D3D',
-    fontSize: 20,
-    fontWeight: '800',
+  settingsBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#EFEFEF',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  profileTextWrap: {
-    flex: 1,
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 40,
   },
-  profileName: {
-    fontSize: 16,
+  
+  /* Profile Info */
+  profileSection: {
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 24,
+  },
+  avatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#F0F0F0',
+    marginBottom: 12,
+  },
+  name: {
+    fontSize: 18,
     fontWeight: '700',
-    color: '#2B2B2B',
+    color: '#1A1A1A',
     marginBottom: 2,
   },
-  profileEmail: {
-    fontSize: 15,
-    color: '#777777',
+  email: {
+    fontSize: 13,
+    color: '#888',
+    marginBottom: 12,
   },
-  signOutButton: {
-    height: 52,
-    borderRadius: 12,
+  editBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E5BCB7',
+    borderColor: '#E5E5E5',
+    backgroundColor: '#FAFAFA',
+  },
+  editBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#333',
+  },
+
+  /* Stats Row */
+  statsRow: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F8F8F8',
-    marginTop: 6,
+    marginBottom: 28,
   },
-  signOutButtonDisabled: {
-    opacity: 0.75,
+  statCol: {
+    flex: 1,
+    alignItems: 'center',
   },
-  signOutText: {
-    color: '#E21B0E',
+  statVal: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1A1A1A',
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#AAA',
+    marginTop: 2,
+  },
+  statDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: '#EFEFEF',
+  },
+
+  /* Section Header */
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+    marginTop: 8,
+  },
+  sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
+    color: '#1A1A1A',
+  },
+  sectionAction: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#AC1D10',
+  },
+
+  /* Order Card */
+  orderCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#EFEFEF',
+    backgroundColor: '#FFF',
+    marginBottom: 20,
+  },
+  orderImg: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    marginRight: 12,
+  },
+  orderMiddle: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  orderTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1A1A1A',
+    marginBottom: 2,
+  },
+  orderSub: {
+    fontSize: 11,
+    color: '#888',
+    marginBottom: 2,
+  },
+  orderTime: {
+    fontSize: 11,
+    color: '#BBB',
+  },
+  reorderBtn: {
+    backgroundColor: '#FBE7E4',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+  },
+  reorderText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#AC1D10',
+  },
+
+  /* Voucher Card */
+  voucherCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#EFEFEF',
+    backgroundColor: '#FFF',
+    marginBottom: 20,
+  },
+  voucherIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    backgroundColor: '#FFF8E1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  voucherBody: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+  },
+  limitedPill: {
+    backgroundColor: '#F0F0F0',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginBottom: 6,
+  },
+  limitedText: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: '#444',
+    letterSpacing: 0.5,
+  },
+  voucherTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#1A1A1A',
+    marginBottom: 2,
+  },
+  voucherSub: {
+    fontSize: 11,
+    color: '#888',
+  },
+
+  /* Address & Payment Columns */
+  twoColRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 20,
+  },
+  gridCard: {
+    flex: 1,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#EFEFEF',
+    backgroundColor: '#FFF',
+    padding: 14,
+  },
+  gridIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#FBE7E4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  gridSectionLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#AC1D10',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+  },
+  gridTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1A1A1A',
+    marginBottom: 2,
+  },
+  gridSub: {
+    fontSize: 11,
+    color: '#888',
+  },
+
+  /* Banner */
+  banner: {
+    backgroundColor: '#9A1608',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  bgIconLeft: {
+    position: 'absolute',
+    left: -40,
+    bottom: -30,
+    transform: [{ rotate: '-15deg' }],
+  },
+  bgIconRight: {
+    position: 'absolute',
+    right: -20,
+    top: 20,
+    transform: [{ rotate: '15deg' }],
+  },
+  bannerTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFF',
+    marginTop: 10,
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  bannerSub: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.8)',
+    textAlign: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 20,
+    lineHeight: 18,
+  },
+  bannerBtn: {
+    backgroundColor: '#FFF',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  bannerBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#9A1608',
   },
 });
