@@ -4,25 +4,26 @@ import { router } from 'expo-router';
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { TmcLogo } from '@/components/tmc-logo';
 
 export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       {/* ── Top Header ── */}
-      <View style={styles.header}>
+      <Animated.View entering={FadeInDown.delay(50).duration(400)} style={styles.header}>
         <View style={styles.logoCircle}>
           <TmcLogo width={36} height={36} />
         </View>
         <Pressable style={styles.settingsBtn} onPress={() => router.push('/account-settings')}>
           <MaterialCommunityIcons name="cog-outline" size={20} color="#1A1A1A" />
         </Pressable>
-      </View>
+      </Animated.View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         
         {/* ── Profile Info ── */}
-        <View style={styles.profileSection}>
+        <Animated.View entering={FadeInDown.delay(100).duration(450)} style={styles.profileSection}>
           <Image
             source={{ uri: 'https://i.pravatar.cc/150?u=johndoe' }}
             style={styles.avatar}
@@ -32,10 +33,10 @@ export default function ProfileScreen() {
           <Pressable style={styles.editBtn}>
             <Text style={styles.editBtnText}>Edit Profile</Text>
           </Pressable>
-        </View>
+        </Animated.View>
 
         {/* ── Stats Row ── */}
-        <View style={styles.statsRow}>
+        <Animated.View entering={FadeInDown.delay(200).duration(450)} style={styles.statsRow}>
           <View style={styles.statCol}>
             <Text style={styles.statVal}>24</Text>
             <Text style={styles.statLabel}>Orders</Text>
@@ -50,55 +51,59 @@ export default function ProfileScreen() {
             <Text style={styles.statVal}>850</Text>
             <Text style={styles.statLabel}>Points</Text>
           </View>
-        </View>
+        </Animated.View>
 
         {/* ── Recent Orders ── */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Recent Orders</Text>
-          <Pressable>
-            <Text style={styles.sectionAction}>View History</Text>
-          </Pressable>
-        </View>
-        
-        <View style={styles.orderCard}>
-          <Image 
-            source={{ uri: 'https://images.unsplash.com/photo-1600891964092-4316c288032e?auto=format&fit=crop&w=200&q=80' }} 
-            style={styles.orderImg} 
-          />
-          <View style={styles.orderMiddle}>
-            <Text style={styles.orderTitle}>Grilled Steak</Text>
-            <Text style={styles.orderSub}>Delivered • 2 items • $12.00</Text>
-            <Text style={styles.orderTime}>Yesterday</Text>
+        <Animated.View entering={FadeInDown.delay(300).duration(450)}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Recent Orders</Text>
+            <Pressable>
+              <Text style={styles.sectionAction}>View History</Text>
+            </Pressable>
           </View>
-          <Pressable style={styles.reorderBtn}>
-            <Text style={styles.reorderText}>Reorder</Text>
-          </Pressable>
-          <MaterialCommunityIcons name="chevron-right" size={20} color="#AAA" style={{ marginLeft: 6 }} />
-        </View>
+          
+          <View style={styles.orderCard}>
+            <Image 
+              source={{ uri: 'https://images.unsplash.com/photo-1600891964092-4316c288032e?auto=format&fit=crop&w=200&q=80' }} 
+              style={styles.orderImg} 
+            />
+            <View style={styles.orderMiddle}>
+              <Text style={styles.orderTitle}>Grilled Steak</Text>
+              <Text style={styles.orderSub}>Delivered • 2 items • $12.00</Text>
+              <Text style={styles.orderTime}>Yesterday</Text>
+            </View>
+            <Pressable style={styles.reorderBtn}>
+              <Text style={styles.reorderText}>Reorder</Text>
+            </Pressable>
+            <MaterialCommunityIcons name="chevron-right" size={20} color="#AAA" style={{ marginLeft: 6 }} />
+          </View>
+        </Animated.View>
 
         {/* ── Vouchers ── */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Vouchers</Text>
-          <Pressable>
-            <Text style={styles.sectionAction}>See All</Text>
-          </Pressable>
-        </View>
+        <Animated.View entering={FadeInDown.delay(400).duration(450)}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Vouchers</Text>
+            <Pressable>
+              <Text style={styles.sectionAction}>See All</Text>
+            </Pressable>
+          </View>
 
-        <View style={styles.voucherCard}>
-          <View style={styles.voucherIconWrap}>
-            <MaterialCommunityIcons name="ticket-percent-outline" size={24} color="#F59E0B" />
-          </View>
-          <View style={styles.voucherBody}>
-            <View style={styles.limitedPill}>
-              <Text style={styles.limitedText}>LIMITED TIME</Text>
+          <View style={styles.voucherCard}>
+            <View style={styles.voucherIconWrap}>
+              <MaterialCommunityIcons name="ticket-percent-outline" size={24} color="#F59E0B" />
             </View>
-            <Text style={styles.voucherTitle}>15% OFF</Text>
-            <Text style={styles.voucherSub}>Next Order • Code: CURATOR15</Text>
+            <View style={styles.voucherBody}>
+              <View style={styles.limitedPill}>
+                <Text style={styles.limitedText}>LIMITED TIME</Text>
+              </View>
+              <Text style={styles.voucherTitle}>15% OFF</Text>
+              <Text style={styles.voucherSub}>Next Order • Code: CURATOR15</Text>
+            </View>
           </View>
-        </View>
+        </Animated.View>
 
         {/* ── Addresses & Payment ── */}
-        <View style={styles.twoColRow}>
+        <Animated.View entering={FadeInDown.delay(500).duration(450)} style={styles.twoColRow}>
           <Pressable style={styles.gridCard}>
             <View style={styles.gridIconWrap}>
               <MaterialCommunityIcons name="home" size={20} color="#AC1D10" />
@@ -116,10 +121,10 @@ export default function ProfileScreen() {
             <Text style={styles.gridTitle}>GCash</Text>
             <Text style={styles.gridSub}>+63 1234 56780</Text>
           </Pressable>
-        </View>
+        </Animated.View>
 
         {/* ── Share Banner ── */}
-        <View style={styles.banner}>
+        <Animated.View entering={FadeInDown.delay(600).duration(500)} style={styles.banner}>
           {/* Faint background icons */}
           <MaterialCommunityIcons name="silverware-fork-knife" size={140} color="rgba(255,255,255,0.05)" style={styles.bgIconLeft} />
           <MaterialCommunityIcons name="gift-outline" size={100} color="rgba(255,255,255,0.06)" style={styles.bgIconRight} />
@@ -130,7 +135,7 @@ export default function ProfileScreen() {
           <Pressable style={styles.bannerBtn}>
             <Text style={styles.bannerBtnText}>Invite Friends</Text>
           </Pressable>
-        </View>
+        </Animated.View>
 
         <View style={{ height: 40 }} />
       </ScrollView>
