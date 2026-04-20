@@ -1,4 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { Platform } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
 
 const LOGIN_URL = 'https://foodhub.tmc-innovations.com/api/login';
 const REGISTER_URL = 'https://foodhub.tmc-innovations.com/api/register';
@@ -301,8 +303,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    // Session persistence can be layered in here later (e.g. secure storage hydration).
-    setIsReady(true);
+    async function loadStoredAuth() {
+      try {
+        let storedToken = null;
+        let storedUser = null;
+
+        if (Platform.OS === 'web') {
+          storedToken = localStorage.getItem('auth_token');
+          const userStr = localStorage.getItem('auth_user');
+          if (userStr) {
+            try {
+               storedUser = JSON.parse(userStr);
+            } catch (e) {}
+          }
+        } else {
+          storedToken = await SecureStore.getItemAsync('auth_token');
+          const userStr = await SecureStore.getItemAsync('auth_user');
+          if (userStr) {
+             try {
+               storedUser = JSON.parse(userStr);
+             } catch (e) {}
+          }
+        }
+
+        if (storedToken) {
+          setToken(storedToken);
+          if (storedUser) {
+            setUser(storedUser);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load auth data', e);
+      } finally {
+        setIsReady(true);
+      }
+    }
+
+    loadStoredAuth();
   }, []);
 
   const postJson = useCallback(async (url: string, body: Record<string, unknown>) => {
@@ -349,7 +386,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const applyAuthPayload = useCallback((payload: unknown) => {
+  const applyAuthPayload = useCallback(async (payload: unknown) => {
     const parsed = parseAuthResponse(payload);
 
     if (!parsed) {
@@ -358,6 +395,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     setToken(parsed.token);
     setUser(parsed.user);
+    await setStoredAuth(parsed.token, parsed.user);
     return true;
   }, []);
 
@@ -372,7 +410,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
-      if (!applyAuthPayload(result.payload)) {
+      const applied = await applyAuthPayload(result.payload);
+      if (!applied) {
         return {
           success: false,
           error: 'Login response is missing a valid token. Please try again.',
@@ -402,9 +441,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
+      const applied = await applyAuthPayload(result.payload);
       return {
         success: true,
-        authenticated: applyAuthPayload(result.payload),
+        authenticated: applied,
       };
     } catch {
       return {
@@ -425,9 +465,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
+      const applied = await applyAuthPayload(result.payload);
       return {
         success: true,
-        authenticated: applyAuthPayload(result.payload),
+        authenticated: applied,
       };
     } catch {
       return {
@@ -654,9 +695,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
+      const applied = await applyAuthPayload(result.payload);
       return {
         success: true,
-        authenticated: applyAuthPayload(result.payload),
+        authenticated: applied,
       };
     } catch {
       return {
@@ -669,6 +711,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = useCallback(async () => {
     setToken(null);
     setUser(null);
+    await clearStoredAuth();
   }, []);
 
   const value = useMemo<AuthContextValue>(
