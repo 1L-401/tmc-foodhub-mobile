@@ -18,6 +18,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 
 import { useRestaurantMenu, MenuItem } from '@/src/features/browse/api/useRestaurantMenu';
+import { useRestaurantReviews } from '@/src/features/browse/api/useRestaurantReviews';
 import { useCart } from '@/components/cart';
 
 const { width } = Dimensions.get('window');
@@ -30,6 +31,7 @@ export default function RestaurantDetails() {
   const { addItem } = useCart();
 
   const { data: menuData, isLoading, isError } = useRestaurantMenu(id);
+  const { data: reviewsData } = useRestaurantReviews(id);
 
   const handleAddToCart = useCallback((item: MenuItem) => {
     const imageUrl = item.image?.startsWith('http') ? item.image : `https://foodhub.tmc-innovations.com${item.image}`;
@@ -103,14 +105,23 @@ export default function RestaurantDetails() {
           {restaurant.cuisine_type?.length ? restaurant.cuisine_type.join(' • ') : (restaurant.categories?.join(' • ') || 'Restaurant')}
         </Text>
         <Text style={styles.dot}>•</Text>
-        <MaterialCommunityIcons name="star" size={14} color="#F9A825" />
-        <MaterialCommunityIcons name="star" size={14} color="#F9A825" />
-        <MaterialCommunityIcons name="star" size={14} color="#F9A825" />
-        <MaterialCommunityIcons name="star" size={14} color="#F9A825" />
-        <MaterialCommunityIcons name="star-half" size={14} color="#F9A825" />
-        <Text style={styles.ratingText}>
-          {restaurant.rating ?? 0} <Text style={styles.reviewsText}>({(restaurant.reviews_count ?? restaurant.reviews ?? 0).toLocaleString()})</Text>
-        </Text>
+        {reviewsData?.summary ? (
+          <>
+            {[1, 2, 3, 4, 5].map((star) => (
+              <MaterialCommunityIcons
+                key={star}
+                name={star <= Math.round(reviewsData.summary.average_rating) ? 'star' : 'star-outline'}
+                size={14}
+                color="#F9A825"
+              />
+            ))}
+            <Text style={styles.ratingText}>
+              {reviewsData.summary.average_rating.toFixed(1)} <Text style={styles.reviewsText}>({reviewsData.summary.total_reviews.toLocaleString()})</Text>
+            </Text>
+          </>
+        ) : (
+          <Text style={styles.ratingText}>Loading rating...</Text>
+        )}
       </Pressable>
 
       <View style={styles.statusRow}>
