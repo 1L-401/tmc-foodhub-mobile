@@ -2,7 +2,6 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React from 'react';
 import {
-  FlatList,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,7 +11,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
-  AddOnCard,
   CartItem,
   CheckoutBar,
   DeliveryAddress,
@@ -21,9 +19,6 @@ import {
   PromoInput,
   useCart,
 } from '@/components/cart';
-import {
-  MOCK_ADD_ONS,
-} from '@/constants/mock-cart-data';
 import { usePayment } from '@/components/payment';
 
 export default function CartScreen() {
@@ -36,6 +31,7 @@ export default function CartScreen() {
     subtotal,
     total,
     selectedAddress,
+    addressCoords,
     setPromoCode,
     applyPromoCode,
     increaseQuantity,
@@ -92,10 +88,12 @@ export default function CartScreen() {
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}>
-          {/* Delivery address card with map */}
+          {/* Delivery address card with real map */}
           <DeliveryAddress
               label={`Delivering to ${selectedAddress.label}`}
               address={selectedAddress.fullAddress}
+              latitude={addressCoords?.latitude}
+              longitude={addressCoords?.longitude}
               onChangePress={handleChangeAddress}
           />
 
@@ -112,7 +110,18 @@ export default function CartScreen() {
           {/* Cart items card */}
           <View style={styles.itemsCard}>
             {cartItems.length === 0 ? (
-              <Text style={styles.emptyText}>Your cart is empty</Text>
+              <View style={styles.emptyState}>
+                <MaterialCommunityIcons name="cart-outline" size={48} color="#D0D0D0" />
+                <Text style={styles.emptyTitle}>Your cart is empty</Text>
+                <Text style={styles.emptySubtext}>
+                  Browse restaurants and add items to get started
+                </Text>
+                <Pressable
+                  style={({ pressed }) => [styles.browseBtn, pressed && styles.pressed]}
+                  onPress={() => router.push('/(tabs)')}>
+                  <Text style={styles.browseBtnText}>Browse Restaurants</Text>
+                </Pressable>
+              </View>
             ) : (
               cartItems.map((item, index) => (
                 <View
@@ -130,52 +139,38 @@ export default function CartScreen() {
             )}
           </View>
 
-          {/* Complete Your Meal */}
-          <View>
-            <Text style={styles.completeTitle}>Complete Your Meal</Text>
-
-            <FlatList
-              horizontal
-              data={MOCK_ADD_ONS}
-              keyExtractor={(item) => item.id}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.addOnList}
-              renderItem={({ item }) => (
-                <AddOnCard item={item} onAdd={() => {}} />
-              )}
-            />
-          </View>
-
           {/* Spacer so content doesn't hide behind the bottom sheet */}
           <View style={styles.bottomSpacer} />
         </ScrollView>
 
         {/* ── Bottom Sheet ── */}
-        <View style={styles.bottomSheet}>
-          <PaymentMethod
-            icon={preferredPayment.icon}
-            label={preferredPayment.label}
-            subtitle={preferredPayment.subtitle}
-            onChange={handleChangePaymentMethod}
-          />
+        {cartItems.length > 0 && (
+          <View style={styles.bottomSheet}>
+            <PaymentMethod
+              icon={preferredPayment.icon}
+              label={preferredPayment.label}
+              subtitle={preferredPayment.subtitle}
+              onChange={handleChangePaymentMethod}
+            />
 
-          <PromoInput
-            value={promoCode}
-            onChangeText={setPromoCode}
-            onApply={applyPromoCode}
-          />
+            <PromoInput
+              value={promoCode}
+              onChangeText={setPromoCode}
+              onApply={applyPromoCode}
+            />
 
-          <OrderSummary
-            subtotal={subtotal}
-            deliveryFee={deliveryFee}
-            discount={appliedDiscount}
-          />
+            <OrderSummary
+              subtotal={subtotal}
+              deliveryFee={deliveryFee}
+              discount={appliedDiscount}
+            />
 
-          <CheckoutBar
-            total={total}
-            onPress={() => router.push('/checkout')}
-          />
-        </View>
+            <CheckoutBar
+              total={total}
+              onPress={() => router.push('/checkout')}
+            />
+          </View>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -257,24 +252,37 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderColor: '#F0F0F0',
   },
-  emptyText: {
-    textAlign: 'center',
-    color: '#7A7A7A',
-    fontSize: 14,
-    paddingVertical: 24,
-  },
 
-  /* ── Complete Your Meal ── */
-  completeTitle: {
-    marginTop: 18,
-    marginBottom: 10,
+  /* ── Empty State ── */
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+  },
+  emptyTitle: {
     fontSize: 16,
     fontWeight: '700',
     color: '#1A1A1A',
+    marginTop: 12,
+    marginBottom: 6,
   },
-  addOnList: {
-    gap: 10,
-    paddingRight: 10,
+  emptySubtext: {
+    fontSize: 13,
+    color: '#8A8A8A',
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 19,
+  },
+  browseBtn: {
+    backgroundColor: '#AC1D10',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  browseBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 
   /* ── Bottom Spacer ── */

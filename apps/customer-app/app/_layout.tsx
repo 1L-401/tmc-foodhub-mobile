@@ -74,13 +74,13 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <PaymentProvider>
-          <CartProvider>
-            <AuthProvider>
+        <AuthProvider>
+          <PaymentProvider>
+            <CartProvider>
               <RootStack />
-            </AuthProvider>
-          </CartProvider>
-        </PaymentProvider>
+            </CartProvider>
+          </PaymentProvider>
+        </AuthProvider>
         <StatusBar style="auto" />
       </ThemeProvider>
     </QueryClientProvider>

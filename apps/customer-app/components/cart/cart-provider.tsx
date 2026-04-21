@@ -1,13 +1,8 @@
-import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import type { CheckoutPaymentOption } from '@/components/checkout/types';
-import {
-  DEFAULT_DELIVERY_ADDRESS,
-  DEFAULT_DELIVERY_FEE,
-  DEFAULT_DISCOUNT,
-  MOCK_CART_ITEMS,
-  SAVED_ADDRESSES,
-} from '@/constants/mock-cart-data';
+import { useAuth } from '@/contexts/auth-context';
+import { geocodeAddress } from '@/src/api/geocode';
 
 import type { CartItemModel, SavedAddress } from './types';
 
@@ -38,9 +33,11 @@ interface CartContextValue {
   selectedAddress: SavedAddress;
   savedAddresses: SavedAddress[];
   activeOrder: ActiveOrder | null;
+  addressCoords: { latitude: number; longitude: number } | null;
   setPromoCode: (value: string) => void;
   applyPromoCode: () => void;
   setSpecialInstructions: (value: string) => void;
+  addItem: (item: CartItemModel) => void;
   increaseQuantity: (id: string) => void;
   decreaseQuantity: (id: string) => void;
   removeItem: (id: string) => void;
@@ -51,27 +48,83 @@ interface CartContextValue {
 
 const CartContext = createContext<CartContextValue | null>(null);
 
+const DEFAULT_DELIVERY_FEE = 3;
+
 function buildOrderShortId(timestamp: number) {
   return `#${String(timestamp).slice(-4)}`;
 }
 
+/**
+ * Build a SavedAddress object from the user's profile address string.
+ */
+function buildAddressFromProfile(address: string | undefined): SavedAddress {
+  if (!address || !address.trim()) {
+    return {
+      id: 'addr-profile',
+      label: 'Home',
+      street: 'No address set',
+      fullAddress: 'Please add a delivery address',
+      isDefault: true,
+    };
+  }
+
+  return {
+    id: 'addr-profile',
+    label: 'Home',
+    street: address.length > 50 ? `${address.slice(0, 50)}...` : address,
+    fullAddress: address,
+    isDefault: true,
+  };
+}
+
 export function CartProvider({ children }: React.PropsWithChildren) {
-  const [cartItems, setCartItems] = useState<CartItemModel[]>(MOCK_CART_ITEMS);
+  const { user } = useAuth();
+
+  // ── Live cart starts empty ──
+  const [cartItems, setCartItems] = useState<CartItemModel[]>([]);
   const [promoCode, setPromoCode] = useState('');
-  const [appliedDiscount, setAppliedDiscount] = useState(DEFAULT_DISCOUNT);
-  const [selectedAddressId, setSelectedAddressId] = useState(DEFAULT_DELIVERY_ADDRESS.id);
+  const [appliedDiscount, setAppliedDiscount] = useState(0);
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [activeOrder, setActiveOrder] = useState<ActiveOrder | null>(null);
+  const [addressCoords, setAddressCoords] = useState<{ latitude: number; longitude: number } | null>(null);
 
+  // ── Build delivery address from user profile ──
+  const profileAddress = useMemo(
+    () => buildAddressFromProfile(user?.address),
+    [user?.address]
+  );
+
+  const [selectedAddressId, setSelectedAddressId] = useState(profileAddress.id);
+
+  const savedAddresses = useMemo(() => [profileAddress], [profileAddress]);
   const deliveryFee = DEFAULT_DELIVERY_FEE;
-  const savedAddresses = SAVED_ADDRESSES;
 
   const selectedAddress = useMemo(
     () =>
       savedAddresses.find((address) => address.id === selectedAddressId) ??
-      DEFAULT_DELIVERY_ADDRESS,
-    [savedAddresses, selectedAddressId]
+      profileAddress,
+    [savedAddresses, selectedAddressId, profileAddress]
   );
+
+  // ── Geocode user address for the map ──
+  useEffect(() => {
+    if (!user?.address) {
+      setAddressCoords(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    geocodeAddress(user.address).then((coords) => {
+      if (!cancelled) {
+        setAddressCoords(coords);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.address]);
 
   const itemCount = useMemo(
     () => cartItems.reduce((totalItems, item) => totalItems + item.quantity, 0),
@@ -91,6 +144,25 @@ export function CartProvider({ children }: React.PropsWithChildren) {
     () => Math.max(0, subtotal + deliveryFee - appliedDiscount),
     [appliedDiscount, deliveryFee, subtotal]
   );
+
+  // ── Add a new item to cart (or increase qty if already present) ──
+  const addItem = useCallback((newItem: CartItemModel) => {
+    setCartItems((previousItems) => {
+      const existingIndex = previousItems.findIndex((item) => item.id === newItem.id);
+
+      if (existingIndex >= 0) {
+        // Item already in cart — increase quantity
+        return previousItems.map((item, index) =>
+          index === existingIndex
+            ? { ...item, quantity: item.quantity + 1 }
+            : item
+        );
+      }
+
+      // New item — add with quantity 1
+      return [...previousItems, { ...newItem, quantity: 1 }];
+    });
+  }, []);
 
   const increaseQuantity = useCallback((id: string) => {
     setCartItems((previousItems) =>
@@ -128,7 +200,7 @@ export function CartProvider({ children }: React.PropsWithChildren) {
     const normalizedCode = promoCode.trim().toUpperCase();
 
     if (!normalizedCode || normalizedCode === 'PROMO5') {
-      setAppliedDiscount(DEFAULT_DISCOUNT);
+      setAppliedDiscount(5);
       return;
     }
 
@@ -182,9 +254,11 @@ export function CartProvider({ children }: React.PropsWithChildren) {
       selectedAddress,
       savedAddresses,
       activeOrder,
+      addressCoords,
       setPromoCode,
       applyPromoCode,
       setSpecialInstructions,
+      addItem,
       increaseQuantity,
       decreaseQuantity,
       removeItem,
@@ -194,6 +268,8 @@ export function CartProvider({ children }: React.PropsWithChildren) {
     }),
     [
       activeOrder,
+      addressCoords,
+      addItem,
       appliedDiscount,
       applyPromoCode,
       cartItems,

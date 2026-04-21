@@ -17,6 +17,9 @@ type AuthUser = {
   name: string;
   email: string;
   role?: string;
+  address?: string;
+  phone?: string;
+  delivery_instructions?: string;
 };
 
 type AuthActionResult =
@@ -119,6 +122,7 @@ type AuthContextValue = {
     passwordConfirmation: string,
   ) => Promise<PasswordResetCompletionResult>;
   signUpWithGoogleCredential: (credential: string) => Promise<AuthActionResult>;
+  refreshUserProfile: () => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -187,6 +191,9 @@ function isAuthUser(payload: unknown): payload is AuthUser {
     name?: unknown;
     email?: unknown;
     role?: unknown;
+    address?: unknown;
+    phone?: unknown;
+    delivery_instructions?: unknown;
   };
 
   if (typeof candidate.id !== 'number') {
@@ -208,6 +215,25 @@ function isAuthUser(payload: unknown): payload is AuthUser {
   return true;
 }
 
+function extractOptionalString(obj: Record<string, unknown>, key: string): string | undefined {
+  const val = obj[key];
+  return typeof val === 'string' && val.trim() ? val : undefined;
+}
+
+function parseUserWithExtras(raw: unknown): AuthUser | null {
+  if (!isAuthUser(raw)) {
+    return null;
+  }
+
+  const obj = raw as Record<string, unknown>;
+  return {
+    ...raw,
+    address: extractOptionalString(obj, 'address'),
+    phone: extractOptionalString(obj, 'phone'),
+    delivery_instructions: extractOptionalString(obj, 'delivery_instructions'),
+  };
+}
+
 function parseAuthResponse(payload: unknown): { token: string; user: AuthUser | null } | null {
   if (typeof payload !== 'object' || payload === null) {
     return null;
@@ -224,7 +250,7 @@ function parseAuthResponse(payload: unknown): { token: string; user: AuthUser | 
 
   return {
     token: candidate.token,
-    user: isAuthUser(candidate.user) ? candidate.user : null,
+    user: parseUserWithExtras(candidate.user),
   };
 }
 
@@ -708,6 +734,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [applyAuthPayload, postJson]);
 
+  const refreshUserProfile = useCallback(async () => {
+    if (!token) {
+      return;
+    }
+
+    try {
+      const response = await fetch('https://foodhub.tmc-innovations.com/api/user', {
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const payload = await response.json();
+      const freshUser = parseUserWithExtras(payload?.user ?? payload);
+
+      if (freshUser) {
+        setUser(freshUser);
+      }
+    } catch {
+      // Silently ignore — profile refresh is best-effort
+    }
+  }, [token]);
+
   const signOut = useCallback(async () => {
     setToken(null);
     setUser(null);
@@ -728,6 +782,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       verifyPasswordResetOtp,
       resetPasswordWithToken,
       signUpWithGoogleCredential,
+      refreshUserProfile,
       signOut,
     }),
     [
@@ -742,6 +797,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       verifyPasswordResetOtp,
       resetPasswordWithToken,
       signUpWithGoogleCredential,
+      refreshUserProfile,
       signOut,
     ],
   );
