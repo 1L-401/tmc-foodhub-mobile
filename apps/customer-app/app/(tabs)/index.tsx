@@ -21,6 +21,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Image } from 'expo-image';
+import { router } from 'expo-router';
 
 import { TmcLogo } from '@/components/tmc-logo';
 import { SectionHeader } from '@/components/home/section-header';
@@ -61,17 +62,11 @@ export default function HomeScreen() {
           </Pressable>
 
           <View style={styles.logoWrap}>
-            <View style={styles.logoIcon}>
-              <Text style={styles.logoText}>TMC</Text>
-            </View>
-            <Text style={styles.logoTitle}>
-              FOOD{'\n'}
-              <Text style={styles.logoBold}>HUB</Text>
-            </Text>
+            <TmcLogo width={130} height={36} />
           </View>
 
           <View style={styles.topBarRight}>
-            <Pressable style={styles.avatarWrap}>
+            <Pressable style={styles.avatarWrap} onPress={() => router.push('/notifications')}>
               <MaterialCommunityIcons
                 name="bell-badge-outline"
                 size={22}
