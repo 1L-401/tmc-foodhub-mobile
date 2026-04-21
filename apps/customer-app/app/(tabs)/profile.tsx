@@ -27,7 +27,7 @@ export default function ProfileScreen() {
         <View style={styles.logoCircle}>
           <TmcLogo width={36} height={36} />
         </View>
-        <Pressable style={styles.settingsBtn} onPress={() => router.push('/account-settings')}>
+        <Pressable style={styles.settingsBtn} onPress={() => router.push('/settings')}>
           <MaterialCommunityIcons name="cog-outline" size={20} color="#1A1A1A" />
         </Pressable>
       </Animated.View>
