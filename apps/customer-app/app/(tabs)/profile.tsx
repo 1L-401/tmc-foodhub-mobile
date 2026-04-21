@@ -7,7 +7,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { TmcLogo } from '@/components/tmc-logo';
 
+import { useAuth } from '@/contexts/auth-context';
+import { usePayment } from '@/components/payment';
+import { useCart } from '@/components/cart';
+
 export default function ProfileScreen() {
+  const { user } = useAuth();
+  const { preferredPayment } = usePayment();
+  const { activeOrder } = useCart();
+  
+  const displayName = user?.name?.trim() ? user.name : 'Unknown User';
+  const displayEmail = user?.email?.trim() ? user.email : 'No email provided';
+  // Use UI Avatars to generate a fallback profile picture with initials
+  const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=F7E8E6&color=AC1D10&size=150`;
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       {/* ── Top Header ── */}
@@ -15,7 +27,7 @@ export default function ProfileScreen() {
         <View style={styles.logoCircle}>
           <TmcLogo width={36} height={36} />
         </View>
-        <Pressable style={styles.settingsBtn} onPress={() => router.push('/account-settings')}>
+        <Pressable style={styles.settingsBtn} onPress={() => router.push('/settings')}>
           <MaterialCommunityIcons name="cog-outline" size={20} color="#1A1A1A" />
         </Pressable>
       </Animated.View>
@@ -25,11 +37,11 @@ export default function ProfileScreen() {
         {/* ── Profile Info ── */}
         <Animated.View entering={FadeInDown.delay(100).duration(450)} style={styles.profileSection}>
           <Image
-            source={{ uri: 'https://i.pravatar.cc/150?u=johndoe' }}
+            source={{ uri: avatarUrl }}
             style={styles.avatar}
           />
-          <Text style={styles.name}>John Doe</Text>
-          <Text style={styles.email}>john.doe@email.com</Text>
+          <Text style={styles.name}>{displayName}</Text>
+          <Text style={styles.email}>{displayEmail}</Text>
           <Pressable style={styles.editBtn}>
             <Text style={styles.editBtnText}>Edit Profile</Text>
           </Pressable>
@@ -62,21 +74,27 @@ export default function ProfileScreen() {
             </Pressable>
           </View>
           
-          <View style={styles.orderCard}>
-            <Image 
-              source={{ uri: 'https://images.unsplash.com/photo-1600891964092-4316c288032e?auto=format&fit=crop&w=200&q=80' }} 
-              style={styles.orderImg} 
-            />
-            <View style={styles.orderMiddle}>
-              <Text style={styles.orderTitle}>Grilled Steak</Text>
-              <Text style={styles.orderSub}>Delivered • 2 items • $12.00</Text>
-              <Text style={styles.orderTime}>Yesterday</Text>
+          {activeOrder ? (
+            <View style={styles.orderCard}>
+              <Image 
+                source={{ uri: activeOrder.items[0]?.image || 'https://images.unsplash.com/photo-1600891964092-4316c288032e?auto=format&fit=crop&w=200&q=80' }} 
+                style={styles.orderImg} 
+              />
+              <View style={styles.orderMiddle}>
+                <Text style={styles.orderTitle}>{activeOrder.items[0]?.name || 'Your Order'}</Text>
+                <Text style={styles.orderSub}>Processing • {activeOrder.items.length} items • ${activeOrder.total.toFixed(2)}</Text>
+                <Text style={styles.orderTime}>Just now</Text>
+              </View>
+              <Pressable style={styles.reorderBtn}>
+                <Text style={styles.reorderText}>Track</Text>
+              </Pressable>
+              <MaterialCommunityIcons name="chevron-right" size={20} color="#AAA" style={{ marginLeft: 6 }} />
             </View>
-            <Pressable style={styles.reorderBtn}>
-              <Text style={styles.reorderText}>Reorder</Text>
-            </Pressable>
-            <MaterialCommunityIcons name="chevron-right" size={20} color="#AAA" style={{ marginLeft: 6 }} />
-          </View>
+          ) : (
+            <View style={[styles.orderCard, { justifyContent: 'center', paddingVertical: 20 }]}>
+              <Text style={{ color: '#888', fontSize: 13 }}>No recent orders yet.</Text>
+            </View>
+          )}
         </Animated.View>
 
         {/* ── Vouchers ── */}
@@ -102,24 +120,23 @@ export default function ProfileScreen() {
           </View>
         </Animated.View>
 
-        {/* ── Addresses & Payment ── */}
         <Animated.View entering={FadeInDown.delay(500).duration(450)} style={styles.twoColRow}>
-          <Pressable style={styles.gridCard}>
+          <Pressable style={styles.gridCard} onPress={() => router.push('/delivery-address')}>
             <View style={styles.gridIconWrap}>
               <MaterialCommunityIcons name="home" size={20} color="#AC1D10" />
             </View>
             <Text style={styles.gridSectionLabel}>HOME ADDRESS</Text>
-            <Text style={styles.gridTitle} numberOfLines={1}>123 Quezon Avenue</Text>
-            <Text style={styles.gridSub} numberOfLines={1}>Unit 4B, Brgy. South Trian...</Text>
+            <Text style={styles.gridTitle} numberOfLines={1}>{user?.address ? 'Home' : 'No Address'}</Text>
+            <Text style={styles.gridSub} numberOfLines={2}>{user?.address || 'Tap to set your address'}</Text>
           </Pressable>
 
-          <Pressable style={styles.gridCard}>
+          <Pressable style={styles.gridCard} onPress={() => router.push('/add-payment-method')}>
             <View style={styles.gridIconWrap}>
-              <MaterialCommunityIcons name="wallet" size={20} color="#AC1D10" />
+              <MaterialCommunityIcons name={preferredPayment?.icon || 'wallet'} size={20} color="#AC1D10" />
             </View>
             <Text style={styles.gridSectionLabel}>PAYMENT METHOD</Text>
-            <Text style={styles.gridTitle}>GCash</Text>
-            <Text style={styles.gridSub}>+63 1234 56780</Text>
+            <Text style={styles.gridTitle}>{preferredPayment?.label || 'Cash'}</Text>
+            <Text style={styles.gridSub}>{preferredPayment?.subtitle || 'Pay on delivery'}</Text>
           </Pressable>
         </Animated.View>
 

@@ -21,6 +21,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Image } from 'expo-image';
+import { router } from 'expo-router';
 
 import { TmcLogo } from '@/components/tmc-logo';
 import { SectionHeader } from '@/components/home/section-header';
@@ -54,43 +55,31 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <StatusBar style="dark" translucent backgroundColor="transparent" />
       <View style={styles.container}>
-        {/* ── Top Bar ── */}
+        {/* ── Top Bar (Logo, Search, Bell) ── */}
         <Animated.View style={[styles.topBar, headerAnim]}>
-          <Pressable style={{ opacity: 1 }}>
-            <MaterialCommunityIcons name="menu" size={24} color="#1A1A1A" />
+          <View style={styles.logoWrap}>
+            <TmcLogo width={36} height={36} />
+          </View>
+
+          <Pressable style={styles.searchWrap} onPress={() => router.push('/search')}>
+            <MaterialCommunityIcons name="magnify" size={18} color="#AAA" />
+            <View pointerEvents="none" style={{ flex: 1 }}>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search for restaurants, cuisines..."
+                placeholderTextColor="#888"
+                editable={false}
+              />
+            </View>
           </Pressable>
 
-          <View style={styles.logoWrap}>
-            <View style={styles.logoIcon}>
-              <Text style={styles.logoText}>TMC</Text>
-            </View>
-            <Text style={styles.logoTitle}>
-              FOOD{'\n'}
-              <Text style={styles.logoBold}>HUB</Text>
-            </Text>
-          </View>
-
-          <View style={styles.topBarRight}>
-            <Pressable style={styles.avatarWrap}>
-              <MaterialCommunityIcons
-                name="bell-badge-outline"
-                size={22}
-                color="#AC1D10"
-              />
-            </Pressable>
-          </View>
-        </Animated.View>
-
-        {/* ── Search ── */}
-        <Animated.View
-          entering={FadeInDown.delay(200).duration(400)}
-          style={styles.searchWrap}>
-          <MaterialCommunityIcons name="magnify" size={18} color="#AAA" />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search restaurants, cuisines..."
-            placeholderTextColor="#AAA"
-          />
+          <Pressable style={styles.avatarWrap} onPress={() => router.push('/notifications')}>
+            <MaterialCommunityIcons
+              name="bell-outline"
+              size={20}
+              color="#1A1A1A"
+            />
+          </Pressable>
         </Animated.View>
 
         <ScrollView
@@ -211,46 +200,43 @@ const styles = StyleSheet.create({
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 12,
+    gap: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F5F5F5',
   },
-  logoWrap: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  logoIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-    backgroundColor: '#AC1D10',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoText: { color: '#FFF', fontSize: 8, fontWeight: '900' },
-  logoTitle: { fontSize: 8, color: '#1A1A1A', fontWeight: '500', lineHeight: 10 },
-  logoBold: { fontWeight: '900', color: '#AC1D10' },
-  topBarRight: { flexDirection: 'row', alignItems: 'center' },
-  avatarWrap: {
+  logoWrap: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#FBE7E4',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
   },
   searchWrap: {
-    marginHorizontal: 16,
-    marginBottom: 12,
-    marginTop: 4,
+    flex: 1,
     height: 40,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E5E5',
-    backgroundColor: '#FFF',
+    borderRadius: 20,
+    backgroundColor: '#F5F5F5',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
     gap: 8,
   },
   searchInput: { flex: 1, fontSize: 13, color: '#1A1A1A' },
+  avatarWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#EFEFEF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   horizontalList: {
     paddingHorizontal: 16,
     gap: 16,

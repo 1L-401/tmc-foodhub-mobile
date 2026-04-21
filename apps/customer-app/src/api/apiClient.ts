@@ -1,25 +1,39 @@
+import { Platform } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
+
 export const BASE_URL = 'https://foodhub.tmc-innovations.com/api';
 
 /**
+ * Retrieve the stored auth token from SecureStore (native) or localStorage (web).
+ */
+async function getStoredToken(): Promise<string | null> {
+  try {
+    if (Platform.OS === 'web') {
+      return localStorage.getItem('auth_token');
+    }
+    return await SecureStore.getItemAsync('auth_token');
+  } catch {
+    return null;
+  }
+}
+
+/**
  * A centralized API Client designed to be used with React Query.
- * Handles automatic base URL injection and standardized error throwing.
+ * Handles automatic base URL injection, auth token injection, and standardized error throwing.
  */
 export const apiClient = async <T>(endpoint: string, options?: RequestInit): Promise<T> => {
   const url = `${BASE_URL}${endpoint}`;
-  
-  // NOTE: Insert SecureStore token retrieval here in the future
-  // const token = await SecureStore.getItemAsync('userToken');
+
+  const token = await getStoredToken();
 
   const defaultHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   };
 
-  /*
   if (token) {
     defaultHeaders['Authorization'] = `Bearer ${token}`;
   }
-  */
 
   const response = await fetch(url, {
     ...options,

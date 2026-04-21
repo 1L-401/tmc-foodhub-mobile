@@ -1,31 +1,39 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { buildStaticMapUrl } from '@/src/api/geocode';
+
 interface DeliveryAddressProps {
   label: string;
   address: string;
+  latitude?: number | null;
+  longitude?: number | null;
   onChangePress?: () => void;
 }
 
-export function DeliveryAddress({ label, address, onChangePress }: DeliveryAddressProps) {
+export function DeliveryAddress({ label, address, latitude, longitude, onChangePress }: DeliveryAddressProps) {
+  const hasCoords = typeof latitude === 'number' && typeof longitude === 'number';
+  const mapUri = hasCoords ? buildStaticMapUrl(latitude, longitude, 16, 400, 200) : null;
+
   return (
     <View style={styles.container}>
       {/* Map Preview */}
       <View style={styles.mapContainer}>
-        <Image
-          source={{
-            uri: 'https://api.mapbox.com/styles/v1/mapbox/light-v11/static/121.0437,14.6349,15,0/400x180@2x?access_token=pk.placeholder',
-          }}
-          style={styles.mapImage}
-          defaultSource={{ uri: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==' }}
-        />
-        {/* Map Overlay - light grey background to simulate map */}
-        <View style={styles.mapOverlay} />
-        {/* Pin Icon */}
-        <View style={styles.pinContainer}>
-          <View style={styles.pinDot} />
-          <View style={styles.pinShadow} />
-        </View>
+        {mapUri ? (
+          <Image
+            source={{ uri: mapUri }}
+            style={styles.mapImageReal}
+          />
+        ) : (
+          <>
+            <View style={styles.mapPlaceholderBg} />
+            {/* Pin Icon */}
+            <View style={styles.pinContainer}>
+              <View style={styles.pinDot} />
+              <View style={styles.pinShadow} />
+            </View>
+          </>
+        )}
       </View>
 
       {/* Address Info Row */}
@@ -63,15 +71,14 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
   },
-  mapImage: {
+  mapImageReal: {
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
-    opacity: 0.3,
   },
-  mapOverlay: {
+  mapPlaceholderBg: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(235, 231, 226, 0.55)',
+    backgroundColor: '#E8E4DF',
   },
   pinContainer: {
     position: 'absolute',

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   ScrollView,
   FlatList,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -17,6 +18,8 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 
 import { useRestaurantMenu, MenuItem } from '@/src/features/browse/api/useRestaurantMenu';
+import { useRestaurantReviews } from '@/src/features/browse/api/useRestaurantReviews';
+import { useCart } from '@/components/cart';
 
 const { width } = Dimensions.get('window');
 const COLUMN_WIDTH = (width - 48) / 2; // 16 margin on sides + 16 gap
@@ -25,8 +28,25 @@ export default function RestaurantDetails() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const [activeCategory, setActiveCategory] = React.useState<string | null>(null);
+  const { addItem } = useCart();
 
   const { data: menuData, isLoading, isError } = useRestaurantMenu(id);
+  const { data: reviewsData } = useRestaurantReviews(id);
+
+  const handleAddToCart = useCallback((item: MenuItem) => {
+    const imageUrl = item.image?.startsWith('http') ? item.image : `https://foodhub.tmc-innovations.com${item.image}`;
+    addItem({
+      id: String(item.id),
+      name: item.title,
+      description: item.description || '',
+      price: Number(item.price),
+      quantity: 1,
+      image: imageUrl,
+      restaurantId: id,
+      restaurantName: menuData?.restaurant?.name || menuData?.restaurant?.restaurant_name || '',
+    });
+    Alert.alert('Added to Cart', `${item.title} has been added to your cart.`);
+  }, [addItem, id, menuData]);
 
   React.useEffect(() => {
     if (menuData?.categories?.length && !activeCategory) {
@@ -85,14 +105,23 @@ export default function RestaurantDetails() {
           {restaurant.cuisine_type?.length ? restaurant.cuisine_type.join(' • ') : (restaurant.categories?.join(' • ') || 'Restaurant')}
         </Text>
         <Text style={styles.dot}>•</Text>
-        <MaterialCommunityIcons name="star" size={14} color="#F9A825" />
-        <MaterialCommunityIcons name="star" size={14} color="#F9A825" />
-        <MaterialCommunityIcons name="star" size={14} color="#F9A825" />
-        <MaterialCommunityIcons name="star" size={14} color="#F9A825" />
-        <MaterialCommunityIcons name="star-half" size={14} color="#F9A825" />
-        <Text style={styles.ratingText}>
-          {restaurant.rating ?? 0} <Text style={styles.reviewsText}>({(restaurant.reviews_count ?? restaurant.reviews ?? 0).toLocaleString()})</Text>
-        </Text>
+        {reviewsData?.summary ? (
+          <>
+            {[1, 2, 3, 4, 5].map((star) => (
+              <MaterialCommunityIcons
+                key={star}
+                name={star <= Math.round(reviewsData.summary.average_rating) ? 'star' : 'star-outline'}
+                size={14}
+                color="#F9A825"
+              />
+            ))}
+            <Text style={styles.ratingText}>
+              {reviewsData.summary.average_rating.toFixed(1)} <Text style={styles.reviewsText}>({reviewsData.summary.total_reviews.toLocaleString()})</Text>
+            </Text>
+          </>
+        ) : (
+          <Text style={styles.ratingText}>Loading rating...</Text>
+        )}
       </Pressable>
 
       <View style={styles.statusRow}>
@@ -185,7 +214,7 @@ export default function RestaurantDetails() {
         </View>
       </View>
       
-      <Pressable style={styles.addButton}>
+      <Pressable style={styles.addButton} onPress={() => handleAddToCart(item)}>
         <MaterialCommunityIcons name="cart-outline" size={20} color="#FFF" />
       </Pressable>
     </View>

@@ -5,6 +5,8 @@ export interface CartItemModel {
   price: number;
   quantity: number;
   image: string;
+  restaurantId?: string | number;
+  restaurantName?: string;
 }
 
 export interface AddOnItem {

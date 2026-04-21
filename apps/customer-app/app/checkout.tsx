@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCart } from '@/components/cart';
 import { PaymentOptionRow, type CheckoutPaymentId } from '@/components/checkout';
 import { usePayment } from '@/components/payment';
+import { buildStaticMapUrl } from '@/src/api/geocode';
 import {
   CHECKOUT_SPECIAL_INSTRUCTIONS_PLACEHOLDER,
 } from '@/constants/mock-checkout-data';
@@ -37,6 +38,7 @@ export default function CheckoutScreen() {
     specialInstructions,
     setSpecialInstructions,
     placeOrderFromCart,
+    addressCoords,
   } = useCart();
   const {
     checkoutPaymentOptions,
@@ -102,20 +104,20 @@ export default function CheckoutScreen() {
           {/* Address card with map */}
           <View style={styles.addressCard}>
             <View style={styles.mapContainer}>
-              <Image
-                source={{
-                  uri: 'https://api.mapbox.com/styles/v1/mapbox/light-v11/static/121.0437,14.6349,15,0/400x180@2x?access_token=pk.placeholder',
-                }}
-                style={styles.mapImage}
-                defaultSource={{
-                  uri: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==',
-                }}
-              />
-              <View style={styles.mapOverlay} />
-              <View style={styles.pinContainer}>
-                <View style={styles.pinDot} />
-                <View style={styles.pinShadow} />
-              </View>
+              {addressCoords ? (
+                <Image
+                  source={{ uri: buildStaticMapUrl(addressCoords.latitude, addressCoords.longitude, 16, 400, 180) }}
+                  style={styles.mapImageReal}
+                />
+              ) : (
+                <>
+                  <View style={styles.mapPlaceholderBg} />
+                  <View style={styles.pinContainer}>
+                    <View style={styles.pinDot} />
+                    <View style={styles.pinShadow} />
+                  </View>
+                </>
+              )}
             </View>
             <View style={styles.addressInfoRow}>
               <View style={styles.addressIcon}>
@@ -341,15 +343,20 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
   },
+  mapImageReal: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
   mapImage: {
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
     opacity: 0.3,
   },
-  mapOverlay: {
+  mapPlaceholderBg: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(235, 231, 226, 0.55)',
+    backgroundColor: '#E8E4DF',
   },
   pinContainer: {
     position: 'absolute',

@@ -16,56 +16,58 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 
-import { RESTAURANT_REVIEWS } from '@/constants/mock-data';
+import { useRestaurantReviews } from '@/src/features/browse/api/useRestaurantReviews';
 
 export default function RatingsAndFeedbacks() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
 
-  // For this mock, we just use the static mock data payload.
-  const data = RESTAURANT_REVIEWS;
+  const { data: reviewsData, isLoading } = useRestaurantReviews(id);
 
   const [reviewText, setReviewText] = useState('');
 
-  const renderHeader = () => (
-    <View style={styles.headerContainer}>
-      <Pressable onPress={() => router.back()} style={styles.backButton}>
-        <MaterialCommunityIcons name="chevron-left" size={28} color="#1A1A1A" />
-      </Pressable>
-      <Text style={styles.screenTitle}>Ratings & Feedbacks</Text>
-      <Text style={styles.subtitleText}>
-        <Text style={styles.subtitleTag}>{data.summary.tags}</Text> • {data.summary.verifiedCount.toLocaleString()} verified reviews
-      </Text>
+  const renderHeader = () => {
+    if (!reviewsData) return null;
+    const { summary } = reviewsData;
+    return (
+      <View style={styles.headerContainer}>
+        <Pressable onPress={() => router.back()} style={styles.backButton}>
+          <MaterialCommunityIcons name="chevron-left" size={28} color="#1A1A1A" />
+        </Pressable>
+        <Text style={styles.screenTitle}>Ratings & Feedbacks</Text>
+        <Text style={styles.subtitleText}>
+          <Text style={styles.subtitleTag}>Review Summary</Text> • {summary.total_reviews.toLocaleString()} verified reviews
+        </Text>
 
-      {/* Summary Card */}
-      <View style={styles.summaryCard}>
-        <View style={styles.summaryLeft}>
-          <Text style={styles.averageScore}>{data.summary.average.toFixed(1)}</Text>
-          <View style={styles.starsRow}>
-            {[1, 2, 3, 4, 5].map((star, i) => (
-              <MaterialCommunityIcons 
-                key={i} 
-                name={i === 4 ? "star-half" : "star"} 
-                size={16} 
-                color="#F9A825" 
-              />
+        {/* Summary Card */}
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryLeft}>
+            <Text style={styles.averageScore}>{summary.average_rating.toFixed(1)}</Text>
+            <View style={styles.starsRow}>
+              {[1, 2, 3, 4, 5].map((star, i) => (
+                <MaterialCommunityIcons 
+                  key={i} 
+                  name={i + 1 <= Math.round(summary.average_rating) ? "star" : "star-outline"} 
+                  size={16} 
+                  color="#F9A825" 
+                />
+              ))}
+            </View>
+            <Text style={styles.baseReviewsText}>Based on {summary.total_reviews.toLocaleString()} reviews</Text>
+          </View>
+
+          <View style={styles.summaryRight}>
+            {summary.distribution.map((dist) => (
+              <View key={dist.rating} style={styles.distRow}>
+                <Text style={styles.distScore}>{dist.rating}</Text>
+                <View style={styles.distBarTrack}>
+                  <View style={[styles.distBarFill, { width: `${dist.percentage}%` }]} />
+                </View>
+                <Text style={styles.distCount}>{dist.count}</Text>
+              </View>
             ))}
           </View>
-          <Text style={styles.baseReviewsText}>Based on {data.summary.totalCount.toLocaleString()} reviews</Text>
         </View>
-
-        <View style={styles.summaryRight}>
-          {data.summary.distribution.map((dist) => (
-            <View key={dist.score} style={styles.distRow}>
-              <Text style={styles.distScore}>{dist.score}</Text>
-              <View style={styles.distBarTrack}>
-                <View style={[styles.distBarFill, { width: `${dist.percentage}%` }]} />
-              </View>
-              <Text style={styles.distCount}>{dist.count}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
 
       {/* Filter Chips */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
@@ -85,15 +87,18 @@ export default function RatingsAndFeedbacks() {
         </Pressable>
       </ScrollView>
     </View>
-  );
+    );
+  };
 
-  const renderReviewItem = ({ item }: { item: typeof data.reviews[0] }) => (
+  const renderReviewItem = ({ item }: { item: any }) => (
     <View style={styles.reviewCard}>
       <View style={styles.reviewHeader}>
-        <Image source={{ uri: item.avatar }} style={styles.avatar} />
+        <View style={[styles.avatar, { alignItems: 'center', justifyContent: 'center', backgroundColor: '#F0F0F0' }]}>
+          <Text style={{ fontWeight: '700', color: '#666' }}>{item.customer_initials}</Text>
+        </View>
         <View style={styles.reviewMeta}>
-          <Text style={styles.reviewName}>{item.name}</Text>
-          <Text style={styles.reviewTime}>{item.time}</Text>
+          <Text style={styles.reviewName}>{item.customer_name}</Text>
+          <Text style={styles.reviewTime}>{item.created_at_human}</Text>
         </View>
         <View style={styles.reviewStars}>
           {[...Array(item.rating)].map((_, i) => (
@@ -102,21 +107,28 @@ export default function RatingsAndFeedbacks() {
         </View>
       </View>
 
-      <Text style={styles.reviewText}>{item.text}</Text>
+      <Text style={styles.reviewText}>{item.review}</Text>
 
       {item.photos && item.photos.length > 0 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.reviewPhotos}>
-          {item.photos.map((photo, index) => (
-            <Image key={index} source={{ uri: photo }} style={styles.reviewPhoto} />
+          {item.photos.map((photo: string, index: number) => (
+            <Image key={index} source={{ uri: `https://foodhub.tmc-innovations.com${photo}` }} style={styles.reviewPhoto} />
           ))}
         </ScrollView>
+      )}
+
+      {item.owner_reply && (
+        <View style={{ backgroundColor: '#F7F7F7', padding: 12, borderRadius: 8, marginTop: -4, marginBottom: 12 }}>
+          <Text style={{ fontSize: 13, fontWeight: '700', color: '#1A1A1A', marginBottom: 4 }}>Restaurant Response</Text>
+          <Text style={{ fontSize: 13, color: '#444' }}>{item.owner_reply}</Text>
+        </View>
       )}
 
       <View style={styles.reviewFooterDivider} />
       
       <Pressable style={styles.helpfulBtn}>
         <MaterialCommunityIcons name="thumb-up-outline" size={16} color="#666" />
-        <Text style={styles.helpfulText}>Helpful ({item.helpfulCount})</Text>
+        <Text style={styles.helpfulText}>Helpful ({item.helpful_count})</Text>
       </Pressable>
     </View>
   );
@@ -125,14 +137,21 @@ export default function RatingsAndFeedbacks() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar style="dark" />
       
-      <FlatList
-        data={data.reviews}
-        keyExtractor={(item) => item.id}
-        renderItem={renderReviewItem}
-        ListHeaderComponent={renderHeader}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-      />
+      {isLoading ? (
+        <>
+          {renderHeader()}
+          <View style={{ flex: 1, alignItems: 'center', paddingTop: 20 }}><Text>Loading reviews...</Text></View>
+        </>
+      ) : (
+        <FlatList
+          data={reviewsData?.reviews || []}
+          keyExtractor={(item) => String(item.id)}
+          renderItem={renderReviewItem}
+          ListHeaderComponent={renderHeader}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
 
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

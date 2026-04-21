@@ -58,6 +58,8 @@ function RootStack() {
       <Stack.Screen name="add-address" options={{ headerShown: false }} />
       <Stack.Screen name="add-payment-method" options={{ headerShown: false }} />
       <Stack.Screen name="account-settings" options={{ headerShown: false }} />
+      <Stack.Screen name="settings" options={{ headerShown: false }} />
+      <Stack.Screen name="notifications" options={{ headerShown: false }} />
       <Stack.Screen name="privacy-security" options={{ headerShown: false }} />
       <Stack.Screen name="notification-settings" options={{ headerShown: false }} />
       <Stack.Screen name="terms-policies" options={{ headerShown: false }} />
@@ -74,13 +76,13 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <PaymentProvider>
-          <CartProvider>
-            <AuthProvider>
+        <AuthProvider>
+          <PaymentProvider>
+            <CartProvider>
               <RootStack />
-            </AuthProvider>
-          </CartProvider>
-        </PaymentProvider>
+            </CartProvider>
+          </PaymentProvider>
+        </AuthProvider>
         <StatusBar style="auto" />
       </ThemeProvider>
     </QueryClientProvider>
