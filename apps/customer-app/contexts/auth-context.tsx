@@ -11,6 +11,7 @@ const OWNER_SEND_OTP_URL = 'https://foodhub.tmc-innovations.com/api/owner/send-o
 const FORGOT_PASSWORD_URL = 'https://foodhub.tmc-innovations.com/api/forgot-password';
 const VERIFY_RESET_OTP_URL = 'https://foodhub.tmc-innovations.com/api/verify-reset-otp';
 const RESET_PASSWORD_URL = 'https://foodhub.tmc-innovations.com/api/reset-password';
+const CHANGE_PASSWORD_URL = 'https://foodhub.tmc-innovations.com/api/user/password';
 
 type AuthUser = {
   id: number;
@@ -73,6 +74,22 @@ type PasswordResetCompletionResult =
       error: string;
     };
 
+export type ChangePasswordFieldErrors = Partial<
+  Record<'current_password' | 'password' | 'password_confirmation', string>
+>;
+
+type ChangePasswordResult =
+  | {
+      success: true;
+      message: string;
+    }
+  | {
+      success: false;
+      error: string;
+      fieldErrors?: ChangePasswordFieldErrors;
+      forceLogout?: boolean;
+    };
+
 export type CustomerSignupPayload = {
   email_verification_token: string;
   first_name: string;
@@ -121,12 +138,30 @@ type AuthContextValue = {
     password: string,
     passwordConfirmation: string,
   ) => Promise<PasswordResetCompletionResult>;
+  changePassword: (
+    currentPassword: string,
+    password: string,
+    passwordConfirmation: string,
+  ) => Promise<ChangePasswordResult>;
   signUpWithGoogleCredential: (credential: string) => Promise<AuthActionResult>;
   refreshUserProfile: () => Promise<void>;
   signOut: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
+function extractFirstErrorString(value: unknown): string | null {
+  if (Array.isArray(value)) {
+    const firstString = value.find((entry) => typeof entry === 'string' && entry.trim());
+    return typeof firstString === 'string' ? firstString : null;
+  }
+
+  if (typeof value === 'string' && value.trim()) {
+    return value;
+  }
+
+  return null;
+}
 
 function getServerErrorMessage(payload: unknown): string | null {
   if (!payload) {
@@ -161,24 +196,48 @@ function getServerErrorMessage(payload: unknown): string | null {
       const values = Object.values(candidate.errors as Record<string, unknown>);
 
       for (const value of values) {
-        if (Array.isArray(value)) {
-          const firstString = value.find((entry) => typeof entry === 'string' && entry.trim());
+        const firstError = extractFirstErrorString(value);
 
-          if (typeof firstString === 'string') {
-            return firstString;
-          }
-
-          continue;
-        }
-
-        if (typeof value === 'string' && value.trim()) {
-          return value;
+        if (firstError) {
+          return firstError;
         }
       }
     }
   }
 
   return null;
+}
+
+function getChangePasswordFieldErrors(payload: unknown): ChangePasswordFieldErrors | null {
+  if (typeof payload !== 'object' || payload === null) {
+    return null;
+  }
+
+  const rawErrors = (payload as { errors?: unknown }).errors;
+
+  if (typeof rawErrors !== 'object' || rawErrors === null) {
+    return null;
+  }
+
+  const errors = rawErrors as Record<string, unknown>;
+  const fieldErrors: ChangePasswordFieldErrors = {};
+  const currentPasswordError = extractFirstErrorString(errors.current_password);
+  const passwordError = extractFirstErrorString(errors.password);
+  const passwordConfirmationError = extractFirstErrorString(errors.password_confirmation);
+
+  if (currentPasswordError) {
+    fieldErrors.current_password = currentPasswordError;
+  }
+
+  if (passwordError) {
+    fieldErrors.password = passwordError;
+  }
+
+  if (passwordConfirmationError) {
+    fieldErrors.password_confirmation = passwordConfirmationError;
+  }
+
+  return Object.keys(fieldErrors).length > 0 ? fieldErrors : null;
 }
 
 function isAuthUser(payload: unknown): payload is AuthUser {
@@ -321,6 +380,39 @@ function parseResetVerificationPayload(payload: unknown): { message: string | nu
         ? candidate.reset_token
         : null,
   };
+}
+
+async function setStoredAuth(nextToken: string, nextUser: AuthUser | null) {
+  if (Platform.OS === 'web') {
+    localStorage.setItem('auth_token', nextToken);
+
+    if (nextUser) {
+      localStorage.setItem('auth_user', JSON.stringify(nextUser));
+    } else {
+      localStorage.removeItem('auth_user');
+    }
+
+    return;
+  }
+
+  await SecureStore.setItemAsync('auth_token', nextToken);
+
+  if (nextUser) {
+    await SecureStore.setItemAsync('auth_user', JSON.stringify(nextUser));
+  } else {
+    await SecureStore.deleteItemAsync('auth_user');
+  }
+}
+
+async function clearStoredAuth() {
+  if (Platform.OS === 'web') {
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('auth_user');
+    return;
+  }
+
+  await SecureStore.deleteItemAsync('auth_token');
+  await SecureStore.deleteItemAsync('auth_user');
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -710,6 +802,79 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [postJson]);
 
+  const changePassword = useCallback(async (
+    currentPassword: string,
+    password: string,
+    passwordConfirmation: string,
+  ): Promise<ChangePasswordResult> => {
+    if (!token) {
+      return {
+        success: false,
+        error: 'Your session has expired. Please log in again.',
+        forceLogout: true,
+      };
+    }
+
+    try {
+      const response = await fetch(CHANGE_PASSWORD_URL, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          current_password: currentPassword,
+          password,
+          password_confirmation: passwordConfirmation,
+        }),
+      });
+
+      const responseBody = await response.text();
+      const payload = parseResponseBody(responseBody);
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          return {
+            success: false,
+            error: getServerErrorMessage(payload) ?? 'Your session has expired. Please log in again.',
+            forceLogout: true,
+          };
+        }
+
+        if (response.status === 422) {
+          return {
+            success: false,
+            error: getServerErrorMessage(payload) ?? 'Please review your password details and try again.',
+            fieldErrors: getChangePasswordFieldErrors(payload) ?? undefined,
+          };
+        }
+
+        if (response.status === 429) {
+          return {
+            success: false,
+            error: 'Too many attempts. Please try again later.',
+          };
+        }
+
+        return {
+          success: false,
+          error: getServerErrorMessage(payload) ?? 'Unable to change your password right now. Please try again.',
+        };
+      }
+
+      return {
+        success: true,
+        message: getServerErrorMessage(payload) ?? 'Password updated successfully.',
+      };
+    } catch {
+      return {
+        success: false,
+        error: 'Unable to connect to the server. Please try again.',
+      };
+    }
+  }, [token]);
+
   const signUpWithGoogleCredential = useCallback(async (credential: string): Promise<AuthActionResult> => {
     try {
       const result = await postJson(GOOGLE_SIGNUP_URL, { credential });
@@ -781,6 +946,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       requestPasswordReset,
       verifyPasswordResetOtp,
       resetPasswordWithToken,
+      changePassword,
       signUpWithGoogleCredential,
       refreshUserProfile,
       signOut,
@@ -796,6 +962,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       requestPasswordReset,
       verifyPasswordResetOtp,
       resetPasswordWithToken,
+      changePassword,
       signUpWithGoogleCredential,
       refreshUserProfile,
       signOut,

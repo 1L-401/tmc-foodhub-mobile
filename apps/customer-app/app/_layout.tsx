@@ -58,6 +58,7 @@ function RootStack() {
       <Stack.Screen name="add-address" options={{ headerShown: false }} />
       <Stack.Screen name="add-payment-method" options={{ headerShown: false }} />
       <Stack.Screen name="account-settings" options={{ headerShown: false }} />
+      <Stack.Screen name="change-password" options={{ headerShown: false }} />
       <Stack.Screen name="settings" options={{ headerShown: false }} />
       <Stack.Screen name="notifications" options={{ headerShown: false }} />
       <Stack.Screen name="privacy-security" options={{ headerShown: false }} />

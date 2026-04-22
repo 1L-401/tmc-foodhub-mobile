@@ -82,7 +82,7 @@ export default function AccountSettingsScreen() {
   }, []);
 
   const handlePasswordPress = useCallback(() => {
-    console.log('[AccountSettings] Password row pressed');
+    router.push('/change-password');
   }, []);
 
   const handleDeactivatePress = useCallback(() => {
