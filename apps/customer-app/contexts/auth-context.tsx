@@ -12,11 +12,17 @@ const FORGOT_PASSWORD_URL = 'https://foodhub.tmc-innovations.com/api/forgot-pass
 const VERIFY_RESET_OTP_URL = 'https://foodhub.tmc-innovations.com/api/verify-reset-otp';
 const RESET_PASSWORD_URL = 'https://foodhub.tmc-innovations.com/api/reset-password';
 const CHANGE_PASSWORD_URL = 'https://foodhub.tmc-innovations.com/api/user/password';
+const USER_PROFILE_URL = 'https://foodhub.tmc-innovations.com/api/user';
 
-type AuthUser = {
+export type AuthUser = {
   id: number;
   name: string;
   email: string;
+  first_name?: string;
+  last_name?: string;
+  avatar?: string;
+  email_verified?: boolean;
+  email_verified_at?: string;
   role?: string;
   address?: string;
   phone?: string;
@@ -90,6 +96,31 @@ type ChangePasswordResult =
       forceLogout?: boolean;
     };
 
+export type UpdateUserProfilePayload = {
+  first_name: string;
+  last_name: string;
+  phone: string | null;
+  address: string | null;
+  delivery_instructions: string | null;
+};
+
+export type UpdateUserProfileFieldErrors = Partial<
+  Record<'first_name' | 'last_name' | 'phone' | 'address' | 'delivery_instructions', string>
+>;
+
+type UpdateUserProfileResult =
+  | {
+      success: true;
+      message: string;
+      user: AuthUser | null;
+    }
+  | {
+      success: false;
+      error: string;
+      fieldErrors?: UpdateUserProfileFieldErrors;
+      forceLogout?: boolean;
+    };
+
 export type CustomerSignupPayload = {
   email_verification_token: string;
   first_name: string;
@@ -143,6 +174,7 @@ type AuthContextValue = {
     password: string,
     passwordConfirmation: string,
   ) => Promise<ChangePasswordResult>;
+  updateUserProfile: (payload: UpdateUserProfilePayload) => Promise<UpdateUserProfileResult>;
   signUpWithGoogleCredential: (credential: string) => Promise<AuthActionResult>;
   refreshUserProfile: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -240,6 +272,41 @@ function getChangePasswordFieldErrors(payload: unknown): ChangePasswordFieldErro
   return Object.keys(fieldErrors).length > 0 ? fieldErrors : null;
 }
 
+function getUpdateUserProfileFieldErrors(payload: unknown): UpdateUserProfileFieldErrors | null {
+  if (typeof payload !== 'object' || payload === null) {
+    return null;
+  }
+
+  const rawErrors = (payload as { errors?: unknown }).errors;
+
+  if (typeof rawErrors !== 'object' || rawErrors === null) {
+    return null;
+  }
+
+  const errors = rawErrors as Record<string, unknown>;
+  const fieldErrors: UpdateUserProfileFieldErrors = {};
+  const fieldSources: Array<[keyof UpdateUserProfileFieldErrors, string[]]> = [
+    ['first_name', ['first_name', 'firstName', 'name']],
+    ['last_name', ['last_name', 'lastName']],
+    ['phone', ['phone']],
+    ['address', ['address']],
+    ['delivery_instructions', ['delivery_instructions', 'deliveryInstructions']],
+  ];
+
+  for (const [fieldKey, possibleErrorKeys] of fieldSources) {
+    for (const sourceKey of possibleErrorKeys) {
+      const fieldError = extractFirstErrorString(errors[sourceKey]);
+
+      if (fieldError) {
+        fieldErrors[fieldKey] = fieldError;
+        break;
+      }
+    }
+  }
+
+  return Object.keys(fieldErrors).length > 0 ? fieldErrors : null;
+}
+
 function isAuthUser(payload: unknown): payload is AuthUser {
   if (typeof payload !== 'object' || payload === null) {
     return false;
@@ -249,6 +316,11 @@ function isAuthUser(payload: unknown): payload is AuthUser {
     id?: unknown;
     name?: unknown;
     email?: unknown;
+    first_name?: unknown;
+    last_name?: unknown;
+    avatar?: unknown;
+    email_verified?: unknown;
+    email_verified_at?: unknown;
     role?: unknown;
     address?: unknown;
     phone?: unknown;
@@ -267,6 +339,30 @@ function isAuthUser(payload: unknown): payload is AuthUser {
     return false;
   }
 
+  if (candidate.first_name !== undefined && typeof candidate.first_name !== 'string') {
+    return false;
+  }
+
+  if (candidate.last_name !== undefined && typeof candidate.last_name !== 'string') {
+    return false;
+  }
+
+  if (candidate.avatar !== undefined && typeof candidate.avatar !== 'string') {
+    return false;
+  }
+
+  if (candidate.email_verified !== undefined && typeof candidate.email_verified !== 'boolean') {
+    return false;
+  }
+
+  if (
+    candidate.email_verified_at !== undefined
+    && candidate.email_verified_at !== null
+    && typeof candidate.email_verified_at !== 'string'
+  ) {
+    return false;
+  }
+
   if (candidate.role !== undefined && typeof candidate.role !== 'string') {
     return false;
   }
@@ -279,14 +375,32 @@ function extractOptionalString(obj: Record<string, unknown>, key: string): strin
   return typeof val === 'string' && val.trim() ? val : undefined;
 }
 
+function extractOptionalBoolean(obj: Record<string, unknown>, key: string): boolean | undefined {
+  const val = obj[key];
+  return typeof val === 'boolean' ? val : undefined;
+}
+
 function parseUserWithExtras(raw: unknown): AuthUser | null {
   if (!isAuthUser(raw)) {
     return null;
   }
 
   const obj = raw as Record<string, unknown>;
+  const emailVerifiedAt = extractOptionalString(obj, 'email_verified_at');
+  const explicitEmailVerified = extractOptionalBoolean(obj, 'email_verified');
+
   return {
     ...raw,
+    first_name: extractOptionalString(obj, 'first_name'),
+    last_name: extractOptionalString(obj, 'last_name'),
+    avatar: extractOptionalString(obj, 'avatar'),
+    email_verified:
+      explicitEmailVerified !== undefined
+        ? explicitEmailVerified
+        : emailVerifiedAt
+          ? true
+          : undefined,
+    email_verified_at: emailVerifiedAt,
     address: extractOptionalString(obj, 'address'),
     phone: extractOptionalString(obj, 'phone'),
     delivery_instructions: extractOptionalString(obj, 'delivery_instructions'),
@@ -311,6 +425,35 @@ function parseAuthResponse(payload: unknown): { token: string; user: AuthUser | 
     token: candidate.token,
     user: parseUserWithExtras(candidate.user),
   };
+}
+
+function extractUserPayload(payload: unknown): unknown {
+  if (typeof payload !== 'object' || payload === null) {
+    return payload;
+  }
+
+  const candidate = payload as {
+    user?: unknown;
+    data?: unknown;
+  };
+
+  if (candidate.user !== undefined) {
+    return candidate.user;
+  }
+
+  if (candidate.data !== undefined) {
+    if (typeof candidate.data === 'object' && candidate.data !== null) {
+      const nestedCandidate = candidate.data as { user?: unknown };
+
+      if (nestedCandidate.user !== undefined) {
+        return nestedCandidate.user;
+      }
+    }
+
+    return candidate.data;
+  }
+
+  return payload;
 }
 
 function parseResponseBody(responseBody: string): unknown {
@@ -875,6 +1018,92 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [token]);
 
+  const updateUserProfile = useCallback(async (
+    payload: UpdateUserProfilePayload,
+  ): Promise<UpdateUserProfileResult> => {
+    if (!token) {
+      return {
+        success: false,
+        error: 'Your session has expired. Please log in again.',
+        forceLogout: true,
+      };
+    }
+
+    try {
+      const response = await fetch(USER_PROFILE_URL, {
+        method: 'PUT',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const responseBody = await response.text();
+      const responsePayload = parseResponseBody(responseBody);
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          return {
+            success: false,
+            error: getServerErrorMessage(responsePayload) ?? 'Your session has expired. Please log in again.',
+            forceLogout: true,
+          };
+        }
+
+        if (response.status === 422) {
+          return {
+            success: false,
+            error:
+              getServerErrorMessage(responsePayload)
+              ?? 'Please review your profile details and try again.',
+            fieldErrors: getUpdateUserProfileFieldErrors(responsePayload) ?? undefined,
+          };
+        }
+
+        return {
+          success: false,
+          error:
+            getServerErrorMessage(responsePayload)
+            ?? 'Unable to update your profile right now. Please try again.',
+        };
+      }
+
+      const userFromResponse = parseUserWithExtras(extractUserPayload(responsePayload));
+
+      const fallbackUser = user
+        ? {
+            ...user,
+            first_name: payload.first_name,
+            last_name: payload.last_name,
+            name: `${payload.first_name} ${payload.last_name}`.trim(),
+            phone: payload.phone ?? undefined,
+            address: payload.address ?? undefined,
+            delivery_instructions: payload.delivery_instructions ?? undefined,
+          }
+        : null;
+
+      const nextUser = userFromResponse ?? fallbackUser;
+
+      if (nextUser) {
+        setUser(nextUser);
+        await setStoredAuth(token, nextUser);
+      }
+
+      return {
+        success: true,
+        message: getServerErrorMessage(responsePayload) ?? 'Profile updated successfully.',
+        user: nextUser,
+      };
+    } catch {
+      return {
+        success: false,
+        error: 'Unable to connect to the server. Please try again.',
+      };
+    }
+  }, [token, user]);
+
   const signUpWithGoogleCredential = useCallback(async (credential: string): Promise<AuthActionResult> => {
     try {
       const result = await postJson(GOOGLE_SIGNUP_URL, { credential });
@@ -905,7 +1134,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const response = await fetch('https://foodhub.tmc-innovations.com/api/user', {
+      const response = await fetch(USER_PROFILE_URL, {
         headers: {
           Accept: 'application/json',
           Authorization: `Bearer ${token}`,
@@ -917,10 +1146,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       const payload = await response.json();
-      const freshUser = parseUserWithExtras(payload?.user ?? payload);
+      const freshUser = parseUserWithExtras(extractUserPayload(payload));
 
       if (freshUser) {
         setUser(freshUser);
+        await setStoredAuth(token, freshUser);
       }
     } catch {
       // Silently ignore — profile refresh is best-effort
@@ -947,6 +1177,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       verifyPasswordResetOtp,
       resetPasswordWithToken,
       changePassword,
+      updateUserProfile,
       signUpWithGoogleCredential,
       refreshUserProfile,
       signOut,
@@ -963,6 +1194,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       verifyPasswordResetOtp,
       resetPasswordWithToken,
       changePassword,
+      updateUserProfile,
       signUpWithGoogleCredential,
       refreshUserProfile,
       signOut,
