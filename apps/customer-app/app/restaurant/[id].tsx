@@ -77,13 +77,22 @@ export default function RestaurantDetails() {
 
   const renderHeader = () => (
     <View style={styles.headerContainer}>
+      {/* Cover Image */}
+      {restaurant.cover_image && (
+        <Image
+          style={styles.coverImage}
+          source={{ uri: restaurant.cover_image?.startsWith('http') ? restaurant.cover_image : `https://foodhub.tmc-innovations.com${restaurant.cover_image}` }}
+          contentFit="cover"
+        />
+      )}
+
       {/* Back Button */}
-      <Pressable style={styles.backButton} onPress={() => router.back()}>
-        <MaterialCommunityIcons name="chevron-left" size={28} color="#1A1A1A" />
+      <Pressable style={[styles.backButton, restaurant.cover_image && styles.backButtonWithCover]} onPress={() => router.back()}>
+        <MaterialCommunityIcons name="chevron-left" size={28} color={restaurant.cover_image ? "#FFF" : "#1A1A1A"} />
       </Pressable>
 
       {/* Logo */}
-      <View style={styles.logoContainer}>
+      <View style={[styles.logoContainer, restaurant.cover_image && { marginTop: -36 }]}>
         {restaurant.logo ? (
           <Image 
             style={styles.logo} 
@@ -243,13 +252,24 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   headerContainer: {
-    paddingTop: 16,
+    paddingTop: 0,
+    paddingBottom: 16,
+  },
+  coverImage: {
+    width: '100%',
+    height: 180,
+    backgroundColor: '#F0F0F0',
   },
   backButton: {
     position: 'absolute',
     left: 16,
     top: 16,
     zIndex: 10,
+    padding: 4,
+  },
+  backButtonWithCover: {
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 20,
     padding: 4,
   },
   logoContainer: {
