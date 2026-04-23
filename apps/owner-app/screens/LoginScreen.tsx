@@ -16,7 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AuthInput } from '@/components/ui/auth-input';
 import { useAuth } from '@/context/AuthContext';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -25,44 +25,22 @@ type FieldTouchedState = {
   password: boolean;
 };
 
-const palette = {
-  light: {
-    pageBackground: '#F3F6FB',
-    cardBackground: '#FFFFFF',
-    cardBorder: '#E2E8F0',
-    title: '#0F172A',
-    subtitle: '#475569',
-    logoBackground: '#AC1D10',
-    logoText: '#FFFFFF',
-    accentText: '#AC1D10',
-    buttonText: '#FFFFFF',
-    buttonDisabled: '#B8C3D0',
-    buttonPrimary: '#AC1D10',
-    helperText: '#64748B',
-    errorBackground: '#FEE4E2',
-    errorText: '#B42318',
-  },
-  dark: {
-    pageBackground: '#020617',
-    cardBackground: '#0F172A',
-    cardBorder: '#334155',
-    title: '#F8FAFC',
-    subtitle: '#CBD5E1',
-    logoBackground: '#D84134',
-    logoText: '#FFFFFF',
-    accentText: '#F97367',
-    buttonText: '#FFFFFF',
-    buttonDisabled: '#475569',
-    buttonPrimary: '#D84134',
-    helperText: '#94A3B8',
-    errorBackground: '#3F1D1D',
-    errorText: '#FCA5A5',
-  },
-} as const;
+const colors = {
+  pageBackground: '#FFFFFF',
+  title: '#1A1A1A',
+  subtitle: '#666666',
+  logoBackground: '#AC1D10',
+  logoText: '#FFFFFF',
+  accentText: '#AC1D10',
+  buttonText: '#FFFFFF',
+  buttonDisabled: '#D6A39C',
+  buttonPrimary: '#AC1D10',
+  helperText: '#A0A0A0',
+  errorBackground: '#FDECEA',
+  errorText: '#C83B2D',
+};
 
 export default function LoginScreen() {
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = colorScheme === 'dark' ? palette.dark : palette.light;
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -160,15 +138,7 @@ export default function LoginScreen() {
             <Text style={[styles.subHeading, { color: colors.subtitle }]}>Sign in to manage your restaurant operations.</Text>
           </Animated.View>
 
-          <Animated.View
-            entering={FadeInDown.delay(180).duration(420)}
-            style={[
-              styles.card,
-              {
-                backgroundColor: colors.cardBackground,
-                borderColor: colors.cardBorder,
-              },
-            ]}>
+          <Animated.View entering={FadeInDown.delay(180).duration(420)} style={styles.formSection}>
             <Text style={[styles.cardTitle, { color: colors.title }]}>Welcome back</Text>
             <Text style={[styles.cardSubtitle, { color: colors.helperText }]}>Use your owner credentials to continue.</Text>
 
@@ -256,55 +226,53 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
     paddingVertical: 28,
   },
   headerBlock: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 32,
   },
   logoContainer: {
-    width: 62,
-    height: 62,
+    width: 64,
+    height: 64,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   logoText: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '900',
     letterSpacing: 0.8,
   },
   brandText: {
-    fontSize: 23,
+    fontSize: 28,
     fontWeight: '800',
-    marginBottom: 4,
+    marginBottom: 8,
   },
   subHeading: {
-    fontSize: 14,
+    fontSize: 16,
     textAlign: 'center',
+    lineHeight: 24,
   },
-  card: {
-    borderWidth: 1,
-    borderRadius: 22,
-    paddingHorizontal: 18,
-    paddingVertical: 20,
+  formSection: {
+    width: '100%',
   },
   cardTitle: {
     fontSize: 22,
     fontWeight: '800',
-    marginBottom: 4,
+    marginBottom: 8,
   },
   cardSubtitle: {
-    fontSize: 13,
-    marginBottom: 18,
+    fontSize: 14,
+    marginBottom: 24,
   },
   errorBanner: {
     marginTop: 4,
-    marginBottom: 14,
+    marginBottom: 16,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
@@ -312,15 +280,15 @@ const styles = StyleSheet.create({
   },
   errorBannerText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '500',
   },
   submitButton: {
-    height: 52,
-    borderRadius: 14,
+    height: 54,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 4,
+    marginTop: 8,
   },
   submitText: {
     fontSize: 16,
@@ -328,15 +296,16 @@ const styles = StyleSheet.create({
   },
   footerBlock: {
     alignItems: 'center',
-    marginTop: 18,
+    marginTop: 32,
   },
   footerText: {
-    fontSize: 12,
-    marginBottom: 2,
+    fontSize: 13,
+    marginBottom: 4,
   },
   footerHighlight: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
     textAlign: 'center',
+    lineHeight: 20,
   },
 });

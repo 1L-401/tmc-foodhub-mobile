@@ -12,7 +12,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 const queryClient = new QueryClient();
 
 export const unstable_settings = {
-  initialRouteName: 'login',
+  initialRouteName: '(auth)',
 };
 
 function AppStack() {
@@ -20,22 +20,21 @@ function AppStack() {
   const segments = useSegments();
   const router = useRouter();
 
+  const rootSegment = segments[0];
+  const isOnAuthRoute = rootSegment === '(auth)' || rootSegment === 'login';
+  const shouldRedirectToAuth = !isHydrating && !isAuthenticated && !isOnAuthRoute;
+  const shouldRedirectToApp = !isHydrating && isAuthenticated && isOnAuthRoute;
+
   useEffect(() => {
-    if (isHydrating) {
+    if (shouldRedirectToAuth) {
+      router.replace('/(auth)/login');
       return;
     }
 
-    const isOnLoginRoute = segments[0] === 'login';
-
-    if (!isAuthenticated && !isOnLoginRoute) {
-      router.replace('/login');
-      return;
-    }
-
-    if (isAuthenticated && isOnLoginRoute) {
+    if (shouldRedirectToApp) {
       router.replace('/(owner)/dashboard');
     }
-  }, [isAuthenticated, isHydrating, router, segments]);
+  }, [router, shouldRedirectToApp, shouldRedirectToAuth]);
 
   if (isHydrating) {
     return (
@@ -47,6 +46,7 @@ function AppStack() {
 
   return (
     <Stack>
+      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="login" options={{ headerShown: false, animation: 'fade' }} />
       <Stack.Screen name="(owner)" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />

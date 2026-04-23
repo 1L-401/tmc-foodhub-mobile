@@ -9,7 +9,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
+
 
 type AuthInputProps = TextInputProps & {
   label: string;
@@ -20,24 +20,14 @@ type AuthInputProps = TextInputProps & {
   onRightIconPress?: () => void;
 };
 
-const palette = {
-  light: {
-    label: '#1A1A1A',
-    text: '#121212',
-    border: '#D8DEE6',
-    inputBackground: '#FFFFFF',
-    placeholder: '#6E7C8D',
-    error: '#B42318',
-  },
-  dark: {
-    label: '#F1F5F9',
-    text: '#F8FAFC',
-    border: '#334155',
-    inputBackground: '#0F172A',
-    placeholder: '#94A3B8',
-    error: '#FCA5A5',
-  },
-} as const;
+const colors = {
+  label: '#1A1A1A',
+  text: '#1A1A1A',
+  border: '#E5E5E5',
+  inputBackground: '#FAFAFA',
+  placeholder: '#A0A0A0',
+  error: '#C83B2D',
+};
 
 function AuthInputComponent({
   label,
@@ -48,9 +38,6 @@ function AuthInputComponent({
   onRightIconPress,
   ...textInputProps
 }: AuthInputProps) {
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = colorScheme === 'dark' ? palette.dark : palette.light;
-
   return (
     <View style={[styles.container, containerStyle]}>
       <Text style={[styles.label, { color: colors.label }]}>{label}</Text>

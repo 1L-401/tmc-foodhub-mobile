@@ -1,1 +1,5 @@
-export { default } from '@/screens/LoginScreen';
+import { Redirect } from 'expo-router';
+
+export default function LegacyLoginRedirect() {
+	return <Redirect href="/(auth)/login" />;
+}

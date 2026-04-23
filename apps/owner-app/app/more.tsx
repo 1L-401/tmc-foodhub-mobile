@@ -2,7 +2,10 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Image,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,6 +16,7 @@ import Animated, { FadeInDown, FadeInLeft } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CustomToggle } from '@/components/custom-toggle';
+import { useAuth } from '@/context/AuthContext';
 
 const PROFILE = {
   name: 'Juan Dela Cruz',
@@ -49,6 +53,68 @@ function SectionHeader({ title }: { title: string }) {
 
 export default function MoreScreen() {
   const [darkMode, setDarkMode] = React.useState(false);
+  const [isLoggingOut, setIsLoggingOut] = React.useState(false);
+  const { logout } = useAuth();
+  const isMountedRef = React.useRef(true);
+
+  React.useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  const handleLogoutConfirmed = React.useCallback(async () => {
+    if (isLoggingOut) {
+      return;
+    }
+
+    setIsLoggingOut(true);
+
+    const result = await logout();
+
+    // Navigation is handled automatically by the auth guard in _layout.tsx
+    // when isAuthenticated becomes false after logout clears the token.
+
+    if (!result.success && isMountedRef.current) {
+      if (Platform.OS === 'web') {
+        window.alert(result.error);
+      } else {
+        Alert.alert('Logout Notice', result.error);
+      }
+    }
+
+    if (isMountedRef.current) {
+      setIsLoggingOut(false);
+    }
+  }, [isLoggingOut, logout]);
+
+  const handleLogoutPress = React.useCallback(() => {
+    if (isLoggingOut) {
+      return;
+    }
+
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm('Are you sure you want to logout?');
+      if (confirmed) {
+        void handleLogoutConfirmed();
+      }
+      return;
+    }
+
+    Alert.alert('Logout', 'Are you sure you want to logout?', [
+      {
+        text: 'Cancel',
+        style: 'cancel',
+      },
+      {
+        text: 'Logout',
+        style: 'destructive',
+        onPress: () => {
+          void handleLogoutConfirmed();
+        },
+      },
+    ]);
+  }, [handleLogoutConfirmed, isLoggingOut]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -169,16 +235,23 @@ export default function MoreScreen() {
           {/* Logout */}
           <Animated.View entering={FadeInDown.delay(800).duration(400)}>
             <Pressable
+              onPress={handleLogoutPress}
+              disabled={isLoggingOut}
               style={({ pressed }) => [
                 styles.logoutBtn,
-                pressed && styles.logoutPressed,
+                pressed && !isLoggingOut && styles.logoutPressed,
+                isLoggingOut && styles.logoutDisabled,
               ]}>
-              <MaterialCommunityIcons
-                name="logout"
-                size={20}
-                color="#AC1D10"
-              />
-              <Text style={styles.logoutText}>Logout</Text>
+              {isLoggingOut ? (
+                <ActivityIndicator size="small" color="#AC1D10" />
+              ) : (
+                <MaterialCommunityIcons
+                  name="logout"
+                  size={20}
+                  color="#AC1D10"
+                />
+              )}
+              <Text style={styles.logoutText}>{isLoggingOut ? 'Logging out...' : 'Logout'}</Text>
             </Pressable>
           </Animated.View>
 
@@ -253,6 +326,9 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#AC1D10',
+  },
+  logoutDisabled: {
+    opacity: 0.65,
   },
   logoutPressed: { opacity: 0.7 },
 });

@@ -21,13 +21,20 @@ type LoginResult =
       error: string;
     };
 
+type LogoutResult =
+  | { success: true }
+  | {
+      success: false;
+      error: string;
+    };
+
 type AuthContextValue = {
   token: string | null;
   user: OwnerUser | null;
   isAuthenticated: boolean;
   isHydrating: boolean;
   login: (email: string, password: string) => Promise<LoginResult>;
-  logout: () => Promise<void>;
+  logout: () => Promise<LogoutResult>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -71,6 +78,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
         setToken(storedToken);
         setUser(parseStoredUser(storedUser));
+      } catch {
+        if (isMounted) {
+          setToken(null);
+          setUser(null);
+        }
       } finally {
         if (isMounted) {
           setIsHydrating(false);
@@ -98,7 +110,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   const clearAuthSession = useCallback(async () => {
-    await AsyncStorage.multiRemove([AUTH_TOKEN_STORAGE_KEY, AUTH_USER_STORAGE_KEY]);
+    await Promise.all([
+      AsyncStorage.removeItem(AUTH_TOKEN_STORAGE_KEY),
+      AsyncStorage.removeItem(AUTH_USER_STORAGE_KEY),
+    ]);
   }, []);
 
   const login = useCallback(async (email: string, password: string): Promise<LoginResult> => {
@@ -122,10 +137,26 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
   }, [persistAuthSession]);
 
-  const logout = useCallback(async () => {
-    setToken(null);
-    setUser(null);
-    await clearAuthSession();
+  const logout = useCallback(async (): Promise<LogoutResult> => {
+    let clearError: unknown = null;
+
+    try {
+      await clearAuthSession();
+    } catch (error) {
+      clearError = error;
+    } finally {
+      setToken(null);
+      setUser(null);
+    }
+
+    if (clearError) {
+      return {
+        success: false,
+        error: 'Signed out, but failed to fully clear local session data.',
+      };
+    }
+
+    return { success: true };
   }, [clearAuthSession]);
 
   const value = useMemo<AuthContextValue>(
