@@ -1,10 +1,10 @@
-import React from 'react';
-import { View, Text, Pressable, StyleSheet, Image as RNImage } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import React from 'react';
+import { Pressable, Image as RNImage, StyleSheet, Text, View } from 'react-native';
 
 import { useRouter } from 'expo-router';
 
-import { SvgUri } from 'react-native-svg';
+import { SvgXml } from 'react-native-svg';
 
 export type RestaurantItem = {
   id: string | number;
@@ -32,6 +32,29 @@ export type RestaurantItem = {
 
 export function RestaurantCard({ restaurant }: { restaurant: RestaurantItem }) {
   const router = useRouter();
+  const inlineSvgClassFills = React.useCallback((xml: string) => {
+    // Convert simple class-based fill rules (e.g. .st2{fill:#e5173f})
+    // into inline fill attributes so react-native-svg preserves logo colors.
+    const classFillMap = new Map<string, string>();
+    const classFillRegex = /\.([a-zA-Z0-9_-]+)\s*\{[^}]*fill\s*:\s*([^;}\s]+)\s*;?[^}]*\}/g;
+    let match: RegExpExecArray | null;
+
+    while ((match = classFillRegex.exec(xml)) !== null) {
+      classFillMap.set(match[1], match[2]);
+    }
+
+    if (classFillMap.size === 0) {
+      return xml;
+    }
+
+    let nextXml = xml;
+    classFillMap.forEach((fillValue, className) => {
+      const classRegex = new RegExp(`class=["']${className}["']`, 'g');
+      nextXml = nextXml.replace(classRegex, `fill="${fillValue}"`);
+    });
+
+    return nextXml;
+  }, []);
   const normalizeUri = React.useCallback((uri?: string | null) => {
     if (!uri) return null;
     return uri.startsWith('http') ? uri : `https://foodhub.tmc-innovations.com${uri}`;
@@ -40,10 +63,57 @@ export function RestaurantCard({ restaurant }: { restaurant: RestaurantItem }) {
   const coverUri = normalizeUri(restaurant.cover_image);
   const logoUri = normalizeUri(restaurant.logo);
   const [currentImageUri, setCurrentImageUri] = React.useState<string | null>(coverUri || logoUri);
+  const [svgXml, setSvgXml] = React.useState<string | null>(null);
+  const [isSvgResolved, setIsSvgResolved] = React.useState(false);
 
   React.useEffect(() => {
     setCurrentImageUri(coverUri || logoUri);
   }, [coverUri, logoUri]);
+
+  React.useEffect(() => {
+    let mounted = true;
+
+    const resolveSvg = async () => {
+      setSvgXml(null);
+      setIsSvgResolved(false);
+
+      if (!currentImageUri) {
+        if (mounted) setIsSvgResolved(true);
+        return;
+      }
+
+      try {
+        const response = await fetch(currentImageUri, {
+          headers: { Accept: 'image/svg+xml,image/*,*/*' },
+        });
+        const contentType = (response.headers.get('content-type') || '').toLowerCase();
+
+        if (contentType.includes('svg')) {
+          const xml = await response.text();
+          const isMissingImagePlaceholder = /missing image/i.test(xml);
+
+          if (isMissingImagePlaceholder && currentImageUri === coverUri && logoUri && logoUri !== coverUri) {
+            if (mounted) {
+              setCurrentImageUri(logoUri);
+            }
+            return;
+          }
+
+          if (mounted) setSvgXml(inlineSvgClassFills(xml));
+        }
+      } catch {
+        // Ignore and let raster image renderer handle the URI.
+      } finally {
+        if (mounted) setIsSvgResolved(true);
+      }
+    };
+
+    resolveSvg();
+
+    return () => {
+      mounted = false;
+    };
+  }, [coverUri, currentImageUri, inlineSvgClassFills, logoUri]);
 
   const handleImageError = React.useCallback(() => {
     if (currentImageUri === coverUri && logoUri && logoUri !== coverUri) {
@@ -53,8 +123,6 @@ export function RestaurantCard({ restaurant }: { restaurant: RestaurantItem }) {
     setCurrentImageUri(null);
   }, [coverUri, currentImageUri, logoUri]);
 
-  const isSvgImage = currentImageUri?.toLowerCase().endsWith('.svg');
-
   return (
     <Pressable 
       style={styles.restaurantCard}
@@ -63,14 +131,14 @@ export function RestaurantCard({ restaurant }: { restaurant: RestaurantItem }) {
       {/* Image area */}
       <View style={[styles.restaurantImage, { backgroundColor: restaurant.color || '#F9F9F9' }]}>
         {currentImageUri ? (
-          isSvgImage ? (
-            <SvgUri uri={currentImageUri} width="100%" height="100%" onError={handleImageError} />
+          svgXml ? (
+            <SvgXml xml={svgXml} width="100%" height="100%" />
           ) : (
             <RNImage
               style={{ width: '100%', height: '100%' }}
               source={{ uri: currentImageUri }}
               resizeMode="cover"
-              onError={handleImageError}
+              onError={isSvgResolved ? handleImageError : undefined}
             />
           )
         ) : (
