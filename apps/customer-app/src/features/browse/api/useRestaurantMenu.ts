@@ -1,6 +1,18 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/src/api/apiClient';
 
+export interface MenuItemVariation {
+  id: number;
+  name: string;
+  price: string | number;
+}
+
+export interface MenuItemAddon {
+  id: number;
+  name: string;
+  price: string | number;
+}
+
 export interface MenuItem {
   id: string | number;
   title: string;
@@ -12,6 +24,8 @@ export interface MenuItem {
   isBestSeller?: boolean;
   category?: string;
   image: string;
+  variations?: MenuItemVariation[];
+  add_ons?: MenuItemAddon[];
 }
 
 export interface MenuCategoryPayload {

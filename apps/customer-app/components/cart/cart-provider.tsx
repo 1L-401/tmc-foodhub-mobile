@@ -134,7 +134,10 @@ export function CartProvider({ children }: React.PropsWithChildren) {
   const subtotal = useMemo(
     () =>
       cartItems.reduce(
-        (subtotalValue, item) => subtotalValue + item.price * item.quantity,
+        (subtotalValue, item) => {
+          const addonTotal = (item.selectedAddons || []).reduce((s, a) => s + a.price, 0);
+          return subtotalValue + (item.price + addonTotal) * item.quantity;
+        },
         0
       ),
     [cartItems]
@@ -145,24 +148,35 @@ export function CartProvider({ children }: React.PropsWithChildren) {
     [appliedDiscount, deliveryFee, subtotal]
   );
 
+  // ── Build a unique cart key from item id + variation + addons ──
+  const buildCartKey = useCallback((item: CartItemModel) => {
+    let key = String(item.id);
+    if (item.selectedVariation) key += `__v:${item.selectedVariation.name}`;
+    if (item.selectedAddons?.length) {
+      key += `__a:${item.selectedAddons.map(a => a.name).sort().join(',')}`;
+    }
+    return key;
+  }, []);
+
   // ── Add a new item to cart (or increase qty if already present) ──
   const addItem = useCallback((newItem: CartItemModel) => {
     setCartItems((previousItems) => {
-      const existingIndex = previousItems.findIndex((item) => item.id === newItem.id);
+      const cartKey = buildCartKey(newItem);
+      const existingIndex = previousItems.findIndex((item) => buildCartKey(item) === cartKey);
 
       if (existingIndex >= 0) {
-        // Item already in cart — increase quantity
+        // Same item + same variation + same addons — increase quantity
         return previousItems.map((item, index) =>
           index === existingIndex
-            ? { ...item, quantity: item.quantity + 1 }
+            ? { ...item, quantity: item.quantity + (newItem.quantity || 1) }
             : item
         );
       }
 
-      // New item — add with quantity 1
-      return [...previousItems, { ...newItem, quantity: 1 }];
+      // New combination — add to cart
+      return [...previousItems, { ...newItem, quantity: newItem.quantity || 1 }];
     });
-  }, []);
+  }, [buildCartKey]);
 
   const increaseQuantity = useCallback((id: string) => {
     setCartItems((previousItems) =>

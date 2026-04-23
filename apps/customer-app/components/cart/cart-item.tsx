@@ -26,12 +26,22 @@ export function CartItem({ item, onIncrease, onDecrease, onDelete, onEditOptions
         <View style={styles.headerRow}>
           <View style={styles.copyWrap}>
             <Text style={styles.name}>{item.name}</Text>
+            {item.selectedVariation && (
+              <Text style={styles.variationText}>{item.selectedVariation.name}</Text>
+            )}
+            {item.selectedAddons && item.selectedAddons.length > 0 && (
+              <Text style={styles.addonsText}>
+                + {item.selectedAddons.map(a => a.name).join(', ')}
+              </Text>
+            )}
             <Text style={styles.description}>{item.description}</Text>
             <Pressable onPress={onEditOptions}>
               <Text style={styles.editText}>Edit Options</Text>
             </Pressable>
           </View>
-          <Text style={styles.price}>{formatPrice(item.price)}</Text>
+          <Text style={styles.price}>{formatPrice(
+            item.price + (item.selectedAddons || []).reduce((s, a) => s + a.price, 0)
+          )}</Text>
         </View>
 
         <View style={styles.controlsRow}>
@@ -105,6 +115,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#AC1D10',
     textDecorationLine: 'underline',
+  },
+  variationText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#AC1D10',
+    marginBottom: 1,
+  },
+  addonsText: {
+    fontSize: 11,
+    color: '#888',
+    marginBottom: 1,
   },
   price: {
     fontSize: 15,
