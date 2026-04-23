@@ -1,3 +1,13 @@
+export interface SelectedVariation {
+  name: string;
+  price: number;
+}
+
+export interface SelectedAddon {
+  name: string;
+  price: number;
+}
+
 export interface CartItemModel {
   id: string;
   name: string;
@@ -7,6 +17,8 @@ export interface CartItemModel {
   image: string;
   restaurantId?: string | number;
   restaurantName?: string;
+  selectedVariation?: SelectedVariation;
+  selectedAddons?: SelectedAddon[];
 }
 
 export interface AddOnItem {

@@ -9,7 +9,6 @@ import {
   ScrollView,
   FlatList,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -20,6 +19,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useRestaurantMenu, MenuItem } from '@/src/features/browse/api/useRestaurantMenu';
 import { useRestaurantReviews } from '@/src/features/browse/api/useRestaurantReviews';
 import { useCart } from '@/components/cart';
+import { MenuItemModal } from '@/components/menu/menu-item-modal';
 
 const { width } = Dimensions.get('window');
 const COLUMN_WIDTH = (width - 48) / 2; // 16 margin on sides + 16 gap
@@ -28,24 +28,39 @@ export default function RestaurantDetails() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const [activeCategory, setActiveCategory] = React.useState<string | null>(null);
+  const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const { addItem } = useCart();
 
   const { data: menuData, isLoading, isError } = useRestaurantMenu(id);
   const { data: reviewsData } = useRestaurantReviews(id);
 
-  const handleAddToCart = useCallback((item: MenuItem) => {
-    const imageUrl = item.image?.startsWith('http') ? item.image : `https://foodhub.tmc-innovations.com${item.image}`;
+  const handleOpenModal = useCallback((item: MenuItem) => {
+    setSelectedItem(item);
+  }, []);
+
+  const handleModalAdd = useCallback((payload: {
+    item: MenuItem;
+    selectedVariation: { name: string; price: number } | undefined;
+    selectedAddons: { name: string; price: number }[];
+    quantity: number;
+    computedPrice: number;
+  }) => {
+    const imageUrl = payload.item.image?.startsWith('http')
+      ? payload.item.image
+      : `https://foodhub.tmc-innovations.com${payload.item.image}`;
+
     addItem({
-      id: String(item.id),
-      name: item.title,
-      description: item.description || '',
-      price: Number(item.price),
-      quantity: 1,
+      id: String(payload.item.id),
+      name: payload.item.title,
+      description: payload.item.description || '',
+      price: payload.computedPrice,
+      quantity: payload.quantity,
       image: imageUrl,
       restaurantId: id,
       restaurantName: menuData?.restaurant?.name || menuData?.restaurant?.restaurant_name || '',
+      selectedVariation: payload.selectedVariation,
+      selectedAddons: payload.selectedAddons,
     });
-    Alert.alert('Added to Cart', `${item.title} has been added to your cart.`);
   }, [addItem, id, menuData]);
 
   React.useEffect(() => {
@@ -77,13 +92,22 @@ export default function RestaurantDetails() {
 
   const renderHeader = () => (
     <View style={styles.headerContainer}>
+      {/* Cover Image */}
+      {restaurant.cover_image && (
+        <Image
+          style={styles.coverImage}
+          source={{ uri: restaurant.cover_image?.startsWith('http') ? restaurant.cover_image : `https://foodhub.tmc-innovations.com${restaurant.cover_image}` }}
+          contentFit="cover"
+        />
+      )}
+
       {/* Back Button */}
-      <Pressable style={styles.backButton} onPress={() => router.back()}>
-        <MaterialCommunityIcons name="chevron-left" size={28} color="#1A1A1A" />
+      <Pressable style={[styles.backButton, restaurant.cover_image && styles.backButtonWithCover]} onPress={() => router.back()}>
+        <MaterialCommunityIcons name="chevron-left" size={28} color={restaurant.cover_image ? "#FFF" : "#1A1A1A"} />
       </Pressable>
 
       {/* Logo */}
-      <View style={styles.logoContainer}>
+      <View style={[styles.logoContainer, restaurant.cover_image && { marginTop: -36 }]}>
         {restaurant.logo ? (
           <Image 
             style={styles.logo} 
@@ -214,7 +238,7 @@ export default function RestaurantDetails() {
         </View>
       </View>
       
-      <Pressable style={styles.addButton} onPress={() => handleAddToCart(item)}>
+      <Pressable style={styles.addButton} onPress={() => handleOpenModal(item)}>
         <MaterialCommunityIcons name="cart-outline" size={20} color="#FFF" />
       </Pressable>
     </View>
@@ -233,6 +257,14 @@ export default function RestaurantDetails() {
         renderItem={renderItem}
         showsVerticalScrollIndicator={false}
       />
+      <MenuItemModal
+        visible={!!selectedItem}
+        item={selectedItem}
+        restaurantId={id}
+        restaurantName={menuData?.restaurant?.name || menuData?.restaurant?.restaurant_name || ''}
+        onClose={() => setSelectedItem(null)}
+        onAddToCart={handleModalAdd}
+      />
     </SafeAreaView>
   );
 }
@@ -243,13 +275,24 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   headerContainer: {
-    paddingTop: 16,
+    paddingTop: 0,
+    paddingBottom: 16,
+  },
+  coverImage: {
+    width: '100%',
+    height: 180,
+    backgroundColor: '#F0F0F0',
   },
   backButton: {
     position: 'absolute',
     left: 16,
     top: 16,
     zIndex: 10,
+    padding: 4,
+  },
+  backButtonWithCover: {
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 20,
     padding: 4,
   },
   logoContainer: {

@@ -67,15 +67,19 @@ export async function geocodeAddress(address: string): Promise<GeocodedLocation 
 }
 
 /**
- * Build a static OpenStreetMap tile image URL for given coordinates.
- * Uses the free staticmap.openstreetmap.de service.
+ * Build a static map tile image URL for given coordinates.
+ * Using Yandex Static Maps API as a highly reliable fallback that resembles Google Maps styling.
+ * Note: Yandex uses longitude,latitude format.
  */
 export function buildStaticMapUrl(
   latitude: number,
   longitude: number,
-  zoom = 16,
-  width = 400,
-  height = 200,
+  zoom = 18,
+  width = 600,
+  height = 300,
 ): string {
-  return `https://staticmap.openstreetmap.de/staticmap.php?center=${latitude},${longitude}&zoom=${zoom}&size=${width}x${height}&maptype=mapnik&markers=${latitude},${longitude},red-pushpin`;
+  // Yandex max size is 600x450, we clamp to that.
+  const w = Math.min(width, 600);
+  const h = Math.min(height, 450);
+  return `https://static-maps.yandex.ru/1.x/?ll=${longitude},${latitude}&size=${w},${h}&z=${zoom}&l=map&pt=${longitude},${latitude},pm2rdm`;
 }

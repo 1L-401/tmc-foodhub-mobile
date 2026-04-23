@@ -14,6 +14,7 @@ export type RestaurantItem = {
   rating?: number;
   reviews_count?: number;
   logo?: string | null;
+  cover_image?: string | null;
   // Fallbacks from mock data
   category?: string;
   reviews?: number;
@@ -21,7 +22,6 @@ export type RestaurantItem = {
   time?: string;
   color?: string;
   accent?: string;
-  cover_image?: string | null;
   operating_status?: string;
   available_items_count?: number;
   owner_name?: string;
