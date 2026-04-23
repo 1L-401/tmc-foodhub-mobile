@@ -37,7 +37,12 @@ import {
 
 // ── Component ─────────────────────────────────────────────────
 export default function HomeScreen() {
-  const { data: restaurants, isLoading: isRestaurantsLoading } = useRestaurants();
+  const {
+    data: restaurants,
+    isLoading: isRestaurantsLoading,
+    isError: isRestaurantsError,
+    error: restaurantsError,
+  } = useRestaurants();
 
   const headerScale = useSharedValue(0.95);
   const headerOpacity = useSharedValue(0);
@@ -167,9 +172,15 @@ export default function HomeScreen() {
           {/* Restaurant Cards */}
           {isRestaurantsLoading ? (
             <ActivityIndicator size="large" color="#AC1D10" style={{ marginTop: 40 }} />
+          ) : isRestaurantsError ? (
+            <Text style={styles.fetchErrorText}>
+              {restaurantsError instanceof Error
+                ? restaurantsError.message
+                : 'Unable to load restaurants right now.'}
+            </Text>
           ) : (
             restaurants?.map((restaurant) => (
-              <RestaurantCard key={restaurant.id} restaurant={restaurant as any} />
+              <RestaurantCard key={restaurant.id} restaurant={restaurant} />
             ))
           )}
         </Animated.View>
@@ -315,5 +326,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
     color: '#444',
+  },
+  fetchErrorText: {
+    marginHorizontal: 16,
+    marginTop: 4,
+    marginBottom: 8,
+    fontSize: 13,
+    color: '#AC1D10',
   },
 });

@@ -1,10 +1,10 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Image as RNImage } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { useRouter } from 'expo-router';
 
-import { Image } from 'expo-image';
+import { SvgUri } from 'react-native-svg';
 
 export type RestaurantItem = {
   id: string | number;
@@ -21,10 +21,39 @@ export type RestaurantItem = {
   time?: string;
   color?: string;
   accent?: string;
+  cover_image?: string | null;
+  operating_status?: string;
+  available_items_count?: number;
+  owner_name?: string;
+  business_address?: string;
+  business_contact_number?: string;
+  price_range?: string | null;
 };
 
 export function RestaurantCard({ restaurant }: { restaurant: RestaurantItem }) {
   const router = useRouter();
+  const normalizeUri = React.useCallback((uri?: string | null) => {
+    if (!uri) return null;
+    return uri.startsWith('http') ? uri : `https://foodhub.tmc-innovations.com${uri}`;
+  }, []);
+
+  const coverUri = normalizeUri(restaurant.cover_image);
+  const logoUri = normalizeUri(restaurant.logo);
+  const [currentImageUri, setCurrentImageUri] = React.useState<string | null>(coverUri || logoUri);
+
+  React.useEffect(() => {
+    setCurrentImageUri(coverUri || logoUri);
+  }, [coverUri, logoUri]);
+
+  const handleImageError = React.useCallback(() => {
+    if (currentImageUri === coverUri && logoUri && logoUri !== coverUri) {
+      setCurrentImageUri(logoUri);
+      return;
+    }
+    setCurrentImageUri(null);
+  }, [coverUri, currentImageUri, logoUri]);
+
+  const isSvgImage = currentImageUri?.toLowerCase().endsWith('.svg');
 
   return (
     <Pressable 
@@ -33,12 +62,17 @@ export function RestaurantCard({ restaurant }: { restaurant: RestaurantItem }) {
     >
       {/* Image area */}
       <View style={[styles.restaurantImage, { backgroundColor: restaurant.color || '#F9F9F9' }]}>
-        {restaurant.logo ? (
-          <Image 
-            style={{ width: '100%', height: '100%' }}
-            source={{ uri: restaurant.logo?.startsWith('http') ? restaurant.logo : `https://foodhub.tmc-innovations.com${restaurant.logo}` }}
-            contentFit="cover"
-          />
+        {currentImageUri ? (
+          isSvgImage ? (
+            <SvgUri uri={currentImageUri} width="100%" height="100%" onError={handleImageError} />
+          ) : (
+            <RNImage
+              style={{ width: '100%', height: '100%' }}
+              source={{ uri: currentImageUri }}
+              resizeMode="cover"
+              onError={handleImageError}
+            />
+          )
         ) : (
           <MaterialCommunityIcons
             name="silverware-fork-knife"
@@ -62,6 +96,11 @@ export function RestaurantCard({ restaurant }: { restaurant: RestaurantItem }) {
         <Text style={styles.restaurantCategory}>
           {restaurant.cuisine_type?.length ? restaurant.cuisine_type.join(', ') : restaurant.category || 'Restaurant'}
         </Text>
+        {typeof restaurant.available_items_count === 'number' ? (
+          <Text style={styles.restaurantCategory}>
+            {restaurant.available_items_count} items available
+          </Text>
+        ) : null}
         <View style={styles.restaurantMeta}>
           <MaterialCommunityIcons name="bike-fast" size={14} color="#888" />
           <Text style={styles.metaText}>₱{restaurant.price || 50}</Text>
