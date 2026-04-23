@@ -1,10 +1,10 @@
-import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import React from 'react';
+import { Pressable, Image as RNImage, StyleSheet, Text, View } from 'react-native';
 
 import { useRouter } from 'expo-router';
 
-import { Image } from 'expo-image';
+import { SvgXml } from 'react-native-svg';
 
 export type RestaurantItem = {
   id: string | number;
@@ -22,10 +22,106 @@ export type RestaurantItem = {
   time?: string;
   color?: string;
   accent?: string;
+  operating_status?: string;
+  available_items_count?: number;
+  owner_name?: string;
+  business_address?: string;
+  business_contact_number?: string;
+  price_range?: string | null;
 };
 
 export function RestaurantCard({ restaurant }: { restaurant: RestaurantItem }) {
   const router = useRouter();
+  const inlineSvgClassFills = React.useCallback((xml: string) => {
+    // Convert simple class-based fill rules (e.g. .st2{fill:#e5173f})
+    // into inline fill attributes so react-native-svg preserves logo colors.
+    const classFillMap = new Map<string, string>();
+    const classFillRegex = /\.([a-zA-Z0-9_-]+)\s*\{[^}]*fill\s*:\s*([^;}\s]+)\s*;?[^}]*\}/g;
+    let match: RegExpExecArray | null;
+
+    while ((match = classFillRegex.exec(xml)) !== null) {
+      classFillMap.set(match[1], match[2]);
+    }
+
+    if (classFillMap.size === 0) {
+      return xml;
+    }
+
+    let nextXml = xml;
+    classFillMap.forEach((fillValue, className) => {
+      const classRegex = new RegExp(`class=["']${className}["']`, 'g');
+      nextXml = nextXml.replace(classRegex, `fill="${fillValue}"`);
+    });
+
+    return nextXml;
+  }, []);
+  const normalizeUri = React.useCallback((uri?: string | null) => {
+    if (!uri) return null;
+    return uri.startsWith('http') ? uri : `https://foodhub.tmc-innovations.com${uri}`;
+  }, []);
+
+  const coverUri = normalizeUri(restaurant.cover_image);
+  const logoUri = normalizeUri(restaurant.logo);
+  const [currentImageUri, setCurrentImageUri] = React.useState<string | null>(coverUri || logoUri);
+  const [svgXml, setSvgXml] = React.useState<string | null>(null);
+  const [isSvgResolved, setIsSvgResolved] = React.useState(false);
+
+  React.useEffect(() => {
+    setCurrentImageUri(coverUri || logoUri);
+  }, [coverUri, logoUri]);
+
+  React.useEffect(() => {
+    let mounted = true;
+
+    const resolveSvg = async () => {
+      setSvgXml(null);
+      setIsSvgResolved(false);
+
+      if (!currentImageUri) {
+        if (mounted) setIsSvgResolved(true);
+        return;
+      }
+
+      try {
+        const response = await fetch(currentImageUri, {
+          headers: { Accept: 'image/svg+xml,image/*,*/*' },
+        });
+        const contentType = (response.headers.get('content-type') || '').toLowerCase();
+
+        if (contentType.includes('svg')) {
+          const xml = await response.text();
+          const isMissingImagePlaceholder = /missing image/i.test(xml);
+
+          if (isMissingImagePlaceholder && currentImageUri === coverUri && logoUri && logoUri !== coverUri) {
+            if (mounted) {
+              setCurrentImageUri(logoUri);
+            }
+            return;
+          }
+
+          if (mounted) setSvgXml(inlineSvgClassFills(xml));
+        }
+      } catch {
+        // Ignore and let raster image renderer handle the URI.
+      } finally {
+        if (mounted) setIsSvgResolved(true);
+      }
+    };
+
+    resolveSvg();
+
+    return () => {
+      mounted = false;
+    };
+  }, [coverUri, currentImageUri, inlineSvgClassFills, logoUri]);
+
+  const handleImageError = React.useCallback(() => {
+    if (currentImageUri === coverUri && logoUri && logoUri !== coverUri) {
+      setCurrentImageUri(logoUri);
+      return;
+    }
+    setCurrentImageUri(null);
+  }, [coverUri, currentImageUri, logoUri]);
 
   return (
     <Pressable 
@@ -34,18 +130,17 @@ export function RestaurantCard({ restaurant }: { restaurant: RestaurantItem }) {
     >
       {/* Image area */}
       <View style={[styles.restaurantImage, { backgroundColor: restaurant.color || '#F9F9F9' }]}>
-        {restaurant.cover_image ? (
-          <Image 
-            style={{ width: '100%', height: '100%' }}
-            source={{ uri: restaurant.cover_image?.startsWith('http') ? restaurant.cover_image : `https://foodhub.tmc-innovations.com${restaurant.cover_image}` }}
-            contentFit="cover"
-          />
-        ) : restaurant.logo ? (
-          <Image 
-            style={{ width: '100%', height: '100%' }}
-            source={{ uri: restaurant.logo?.startsWith('http') ? restaurant.logo : `https://foodhub.tmc-innovations.com${restaurant.logo}` }}
-            contentFit="cover"
-          />
+        {currentImageUri ? (
+          svgXml ? (
+            <SvgXml xml={svgXml} width="100%" height="100%" />
+          ) : (
+            <RNImage
+              style={{ width: '100%', height: '100%' }}
+              source={{ uri: currentImageUri }}
+              resizeMode="cover"
+              onError={isSvgResolved ? handleImageError : undefined}
+            />
+          )
         ) : (
           <MaterialCommunityIcons
             name="silverware-fork-knife"
@@ -69,6 +164,11 @@ export function RestaurantCard({ restaurant }: { restaurant: RestaurantItem }) {
         <Text style={styles.restaurantCategory}>
           {restaurant.cuisine_type?.length ? restaurant.cuisine_type.join(', ') : restaurant.category || 'Restaurant'}
         </Text>
+        {typeof restaurant.available_items_count === 'number' ? (
+          <Text style={styles.restaurantCategory}>
+            {restaurant.available_items_count} items available
+          </Text>
+        ) : null}
         <View style={styles.restaurantMeta}>
           <MaterialCommunityIcons name="bike-fast" size={14} color="#888" />
           <Text style={styles.metaText}>₱{restaurant.price || 50}</Text>
