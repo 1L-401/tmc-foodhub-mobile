@@ -13,7 +13,8 @@ interface DeliveryAddressProps {
 
 export function DeliveryAddress({ label, address, latitude, longitude, onChangePress }: DeliveryAddressProps) {
   const hasCoords = typeof latitude === 'number' && typeof longitude === 'number';
-  const mapUri = hasCoords ? buildStaticMapUrl(latitude, longitude, 16, 400, 200) : null;
+  // Zoom 18 gives street-level detail, 800x400 for high resolution rendering
+  const mapUri = hasCoords ? buildStaticMapUrl(latitude, longitude, 18, 800, 400) : null;
 
   return (
     <View style={styles.container}>
@@ -66,7 +67,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   mapContainer: {
-    height: 130,
+    height: 180,
     backgroundColor: '#E8E4DF',
     position: 'relative',
     overflow: 'hidden',

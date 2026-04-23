@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Text,
   View,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -37,8 +38,20 @@ export default function CartScreen() {
     increaseQuantity,
     decreaseQuantity,
     removeItem,
+    fetchCart,
+    isCartLoading,
   } = useCart();
   const { preferredPayment } = usePayment();
+
+  const [refreshing, setRefreshing] = React.useState(false);
+
+  const handleRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    if (fetchCart) {
+      await fetchCart();
+    }
+    setRefreshing(false);
+  }, [fetchCart]);
 
   const handleIncreaseQuantity = (id: string) => {
     increaseQuantity(id);
@@ -87,7 +100,15 @@ export default function CartScreen() {
         {/* ── Scrollable Content ── */}
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}>
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              colors={['#AC1D10']}
+              tintColor="#AC1D10"
+            />
+          }>
           {/* Delivery address card with real map */}
           <DeliveryAddress
               label={`Delivering to ${selectedAddress.label}`}

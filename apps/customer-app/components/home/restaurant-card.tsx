@@ -14,6 +14,7 @@ export type RestaurantItem = {
   rating?: number;
   reviews_count?: number;
   logo?: string | null;
+  cover_image?: string | null;
   // Fallbacks from mock data
   category?: string;
   reviews?: number;
@@ -33,7 +34,13 @@ export function RestaurantCard({ restaurant }: { restaurant: RestaurantItem }) {
     >
       {/* Image area */}
       <View style={[styles.restaurantImage, { backgroundColor: restaurant.color || '#F9F9F9' }]}>
-        {restaurant.logo ? (
+        {restaurant.cover_image ? (
+          <Image 
+            style={{ width: '100%', height: '100%' }}
+            source={{ uri: restaurant.cover_image?.startsWith('http') ? restaurant.cover_image : `https://foodhub.tmc-innovations.com${restaurant.cover_image}` }}
+            contentFit="cover"
+          />
+        ) : restaurant.logo ? (
           <Image 
             style={{ width: '100%', height: '100%' }}
             source={{ uri: restaurant.logo?.startsWith('http') ? restaurant.logo : `https://foodhub.tmc-innovations.com${restaurant.logo}` }}
