@@ -1,10 +1,30 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { Platform } from 'react-native';
+import { MMKV } from 'react-native-mmkv';
 
 import type { CheckoutPaymentOption } from '@/components/checkout/types';
 import { useAuth } from '@/contexts/auth-context';
 import { geocodeAddress } from '@/src/api/geocode';
 
 import type { CartItemModel, SavedAddress } from './types';
+
+// ── Persistent Local Storage ──
+const storage = Platform.OS !== 'web' ? new MMKV() : null;
+
+function getStorageString(key: string): string | null {
+  if (Platform.OS === 'web') {
+    return localStorage.getItem(key);
+  }
+  return storage?.getString(key) ?? null;
+}
+
+function setStorageString(key: string, value: string) {
+  if (Platform.OS === 'web') {
+    localStorage.setItem(key, value);
+  } else {
+    storage?.set(key, value);
+  }
+}
 
 export interface ActiveOrder {
   id: string;
@@ -44,6 +64,8 @@ interface CartContextValue {
   selectAddressById: (id: string) => void;
   placeOrderFromCart: (paymentMethod: CheckoutPaymentOption) => ActiveOrder;
   clearActiveOrder: () => void;
+  fetchCart: () => Promise<void>;
+  isCartLoading: boolean;
 }
 
 const CartContext = createContext<CartContextValue | null>(null);
@@ -82,11 +104,64 @@ export function CartProvider({ children }: React.PropsWithChildren) {
 
   // ── Live cart starts empty ──
   const [cartItems, setCartItems] = useState<CartItemModel[]>([]);
+  const [isCartLoading, setIsCartLoading] = useState(false);
+  const loadedUserIdRef = React.useRef<number | string | null | undefined>(undefined);
   const [promoCode, setPromoCode] = useState('');
   const [appliedDiscount, setAppliedDiscount] = useState(0);
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [activeOrder, setActiveOrder] = useState<ActiveOrder | null>(null);
   const [addressCoords, setAddressCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+
+  // ── Fetch Cart (Manual Refresh) ──
+  const fetchCart = useCallback(async () => {
+    if (!user?.id) return;
+    setIsCartLoading(true);
+    // Simulate a brief network delay since we are pulling from local storage
+    // but the user requested a pull-to-refresh interaction
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    
+    const key = `cart_${user.id}`;
+    const stored = getStorageString(key);
+    if (stored) {
+      try {
+        setCartItems(JSON.parse(stored));
+      } catch (e) {
+        setCartItems([]);
+      }
+    }
+    setIsCartLoading(false);
+  }, [user?.id]);
+
+  // ── Load cart from local storage when user changes ──
+  useEffect(() => {
+    setIsCartLoading(true);
+    if (user?.id) {
+      const key = `cart_${user.id}`;
+      const stored = getStorageString(key);
+      if (stored) {
+        try {
+          setCartItems(JSON.parse(stored));
+        } catch (e) {
+          setCartItems([]);
+        }
+      } else {
+        setCartItems([]);
+      }
+    } else {
+      setCartItems([]);
+    }
+    loadedUserIdRef.current = user?.id;
+    setIsCartLoading(false);
+  }, [user?.id]);
+
+  // ── Save cart to local storage whenever it changes ──
+  useEffect(() => {
+    // Only save if we have finished loading the cart for the current user
+    if (user?.id && loadedUserIdRef.current === user.id) {
+      const key = `cart_${user.id}`;
+      setStorageString(key, JSON.stringify(cartItems));
+    }
+  }, [cartItems, user?.id]);
 
   // ── Build delivery address from user profile ──
   const profileAddress = useMemo(
@@ -179,28 +254,41 @@ export function CartProvider({ children }: React.PropsWithChildren) {
   }, [buildCartKey]);
 
   const increaseQuantity = useCallback((id: string) => {
-    setCartItems((previousItems) =>
-      previousItems.map((item) =>
-        item.id === id ? { ...item, quantity: item.quantity + 1 } : item
-      )
-    );
-  }, []);
+    setCartItems((previousItems) => {
+      // Find the item to check its variation+addon unique key
+      const targetItem = previousItems.find((item) => item.id === id || buildCartKey(item) === id);
+      const keyToMatch = targetItem ? buildCartKey(targetItem) : id;
+
+      return previousItems.map((item) =>
+        buildCartKey(item) === keyToMatch || item.id === id 
+          ? { ...item, quantity: item.quantity + 1 } 
+          : item
+      );
+    });
+  }, [buildCartKey]);
 
   const decreaseQuantity = useCallback((id: string) => {
-    setCartItems((previousItems) =>
-      previousItems.map((item) =>
-        item.id === id
+    setCartItems((previousItems) => {
+      // Find the item to check its variation+addon unique key
+      const targetItem = previousItems.find((item) => item.id === id || buildCartKey(item) === id);
+      const keyToMatch = targetItem ? buildCartKey(targetItem) : id;
+      
+      return previousItems.map((item) =>
+        buildCartKey(item) === keyToMatch || item.id === id
           ? { ...item, quantity: Math.max(1, item.quantity - 1) }
           : item
-      )
-    );
-  }, []);
+      );
+    });
+  }, [buildCartKey]);
 
   const removeItem = useCallback((id: string) => {
-    setCartItems((previousItems) =>
-      previousItems.filter((item) => item.id !== id)
-    );
-  }, []);
+    setCartItems((previousItems) => {
+      const targetItem = previousItems.find((item) => item.id === id || buildCartKey(item) === id);
+      const keyToMatch = targetItem ? buildCartKey(targetItem) : id;
+      
+      return previousItems.filter((item) => buildCartKey(item) !== keyToMatch && item.id !== id);
+    });
+  }, [buildCartKey]);
 
   const selectAddressById = useCallback((id: string) => {
     if (!savedAddresses.some((address) => address.id === id)) {
@@ -279,6 +367,8 @@ export function CartProvider({ children }: React.PropsWithChildren) {
       selectAddressById,
       placeOrderFromCart,
       clearActiveOrder,
+      fetchCart,
+      isCartLoading,
     }),
     [
       activeOrder,

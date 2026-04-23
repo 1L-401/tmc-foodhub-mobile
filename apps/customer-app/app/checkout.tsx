@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { useCart } from '@/components/cart';
+import { useCart, PromoInput } from '@/components/cart';
 import { PaymentOptionRow, type CheckoutPaymentId } from '@/components/checkout';
 import { usePayment } from '@/components/payment';
 import { buildStaticMapUrl } from '@/src/api/geocode';
@@ -39,6 +39,8 @@ export default function CheckoutScreen() {
     setSpecialInstructions,
     placeOrderFromCart,
     addressCoords,
+    setPromoCode,
+    applyPromoCode,
   } = useCart();
   const {
     checkoutPaymentOptions,
@@ -197,6 +199,14 @@ export default function CheckoutScreen() {
               onPress={() => handleSelectPayment(option.id)}
             />
           ))}
+
+          {/* ── Promo Code ── */}
+          <Text style={styles.paymentTitle}>Promotion</Text>
+          <PromoInput
+            value={promoCode}
+            onChangeText={setPromoCode}
+            onApply={applyPromoCode}
+          />
 
           {/* ── Totals ── */}
           <View style={styles.totals}>
