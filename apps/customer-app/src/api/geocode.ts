@@ -16,8 +16,10 @@ const geocodeCache = new Map<string, GeocodedLocation | null>();
  */
 export async function geocodeAddress(address: string): Promise<GeocodedLocation | null> {
   const trimmed = address.trim();
+  const fallbackLocation: GeocodedLocation = { latitude: 14.5995, longitude: 120.9842 }; // Manila
+
   if (!trimmed) {
-    return null;
+    return fallbackLocation;
   }
 
   // Return cached result if available
@@ -37,15 +39,15 @@ export async function geocodeAddress(address: string): Promise<GeocodedLocation 
     });
 
     if (!response.ok) {
-      geocodeCache.set(trimmed, null);
-      return null;
+      geocodeCache.set(trimmed, fallbackLocation);
+      return fallbackLocation;
     }
 
     const results = await response.json();
 
     if (!Array.isArray(results) || results.length === 0) {
-      geocodeCache.set(trimmed, null);
-      return null;
+      geocodeCache.set(trimmed, fallbackLocation);
+      return fallbackLocation;
     }
 
     const first = results[0];
@@ -53,16 +55,16 @@ export async function geocodeAddress(address: string): Promise<GeocodedLocation 
     const longitude = parseFloat(first.lon);
 
     if (Number.isNaN(latitude) || Number.isNaN(longitude)) {
-      geocodeCache.set(trimmed, null);
-      return null;
+      geocodeCache.set(trimmed, fallbackLocation);
+      return fallbackLocation;
     }
 
     const location: GeocodedLocation = { latitude, longitude };
     geocodeCache.set(trimmed, location);
     return location;
   } catch {
-    geocodeCache.set(trimmed, null);
-    return null;
+      geocodeCache.set(trimmed, fallbackLocation);
+      return fallbackLocation;
   }
 }
 

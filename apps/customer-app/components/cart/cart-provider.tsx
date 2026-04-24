@@ -164,7 +164,7 @@ export function CartProvider({ children }: React.PropsWithChildren) {
           description: '',
           price: Number(item.price),
           quantity: Number(item.quantity),
-          image: item.image,
+          image: item.image?.startsWith('http') ? item.image : (item.image ? `https://foodhub.tmc-innovations.com${item.image}` : ''),
           restaurantId: String(item.restaurantId),
           restaurantName: item.storeName,
           selectedVariation: item.variation?.length ? item.variation[0] : undefined,
