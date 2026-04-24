@@ -85,3 +85,26 @@ export function buildStaticMapUrl(
   const h = Math.min(height, 450);
   return `https://static-maps.yandex.ru/1.x/?ll=${longitude},${latitude}&size=${w},${h}&z=${zoom}&l=map&pt=${longitude},${latitude},pm2rdm`;
 }
+
+/**
+ * Build a static map URL with a route line (polyline) between two coordinates
+ */
+export function buildRouteStaticMapUrl(
+  startLat: number,
+  startLng: number,
+  endLat: number,
+  endLng: number,
+  width = 600,
+  height = 300,
+): string {
+  const w = Math.min(width, 600);
+  const h = Math.min(height, 450);
+  
+  // Polyline coordinates (start to end)
+  const pl = `c:AC1D10FF,w:4,${startLng},${startLat},${endLng},${endLat}`;
+  
+  // Markers: pm2rdm (red) for start, pm2gnm (green) for end
+  const pt = `${startLng},${startLat},pm2rdm~${endLng},${endLat},pm2gnm`;
+  
+  return `https://static-maps.yandex.ru/1.x/?l=map&size=${w},${h}&pt=${pt}&pl=${pl}`;
+}

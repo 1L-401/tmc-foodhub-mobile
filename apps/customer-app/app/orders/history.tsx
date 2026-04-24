@@ -189,7 +189,9 @@ export default function OrderHistoryScreen() {
               </Pressable>
             )}
             {item.status !== 'Delivered' && (
-              <Pressable style={styles.actionBtnGray}>
+              <Pressable 
+                style={styles.actionBtnGray}
+                onPress={() => router.push({ pathname: '/order-tracking/[id]', params: { id: item.id } })}>
                 <Text style={styles.actionBtnTextGray}>Track Order</Text>
               </Pressable>
             )}

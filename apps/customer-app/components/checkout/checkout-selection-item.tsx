@@ -6,8 +6,9 @@ interface CheckoutSelectionItemProps {
   item: CartItemModel;
 }
 
-function formatPrice(value: number) {
-  return `$${value.toFixed(2)}`;
+function formatPrice(value: number | string) {
+  const numericValue = Number(value) || 0;
+  return `$${numericValue.toFixed(2)}`;
 }
 
 export function CheckoutSelectionItem({ item }: CheckoutSelectionItemProps) {
