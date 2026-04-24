@@ -5,6 +5,7 @@ import { MMKV } from 'react-native-mmkv';
 import type { CheckoutPaymentOption } from '@/components/checkout/types';
 import { useAuth } from '@/contexts/auth-context';
 import { geocodeAddress } from '@/src/api/geocode';
+import { apiClient } from '@/src/api/apiClient';
 
 import type { CartItemModel, SavedAddress } from './types';
 
@@ -62,7 +63,7 @@ interface CartContextValue {
   decreaseQuantity: (id: string) => void;
   removeItem: (id: string) => void;
   selectAddressById: (id: string) => void;
-  placeOrderFromCart: (paymentMethod: CheckoutPaymentOption) => ActiveOrder;
+  placeOrderFromCart: (paymentMethod: CheckoutPaymentOption) => Promise<ActiveOrder>;
   clearActiveOrder: () => void;
   fetchCart: () => Promise<void>;
   isCartLoading: boolean;
@@ -111,57 +112,104 @@ export function CartProvider({ children }: React.PropsWithChildren) {
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [activeOrder, setActiveOrder] = useState<ActiveOrder | null>(null);
   const [addressCoords, setAddressCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [isCartInitialized, setIsCartInitialized] = useState(false);
 
-  // ── Fetch Cart (Manual Refresh) ──
+  // ── Sync Cart with Backend ──
+  const syncCartWithBackend = useCallback(async (items: CartItemModel[]) => {
+    try {
+      const payload = items.map((item) => ({
+        id: Number(item.id),
+        title: item.name,
+        image: item.image,
+        price: item.price,
+        storeName: item.restaurantName || '',
+        restaurantId: Number(item.restaurantId),
+        variation: item.selectedVariation ? [item.selectedVariation] : [],
+        addOns: item.selectedAddons || [],
+        quantity: item.quantity,
+      }));
+
+      await apiClient('/cart', {
+        method: 'PUT',
+        body: JSON.stringify({ items: payload }),
+      });
+    } catch (error) {
+      console.error('Failed to sync cart:', error);
+    }
+  }, []);
+
+  // ── Fetch Cart ──
   const fetchCart = useCallback(async () => {
     if (!user?.id) return;
     setIsCartLoading(true);
-    // Simulate a brief network delay since we are pulling from local storage
-    // but the user requested a pull-to-refresh interaction
-    await new Promise((resolve) => setTimeout(resolve, 500));
     
-    const key = `cart_${user.id}`;
-    const stored = getStorageString(key);
-    if (stored) {
-      try {
-        setCartItems(JSON.parse(stored));
-      } catch (e) {
-        setCartItems([]);
-      }
-    }
-    setIsCartLoading(false);
-  }, [user?.id]);
-
-  // ── Load cart from local storage when user changes ──
-  useEffect(() => {
-    setIsCartLoading(true);
-    if (user?.id) {
+    try {
+      // First check local storage for quick display
       const key = `cart_${user.id}`;
       const stored = getStorageString(key);
       if (stored) {
         try {
           setCartItems(JSON.parse(stored));
         } catch (e) {
-          setCartItems([]);
+          // Ignored
         }
-      } else {
-        setCartItems([]);
       }
-    } else {
-      setCartItems([]);
+
+      // Then fetch from server
+      const response = await apiClient<{ items: any[] }>('/cart');
+      if (response?.items) {
+        const mappedItems: CartItemModel[] = response.items.map((item) => ({
+          id: String(item.id),
+          name: item.title,
+          description: '',
+          price: Number(item.price),
+          quantity: Number(item.quantity),
+          image: item.image,
+          restaurantId: String(item.restaurantId),
+          restaurantName: item.storeName,
+          selectedVariation: item.variation?.length ? item.variation[0] : undefined,
+          selectedAddons: item.addOns || [],
+        }));
+        setCartItems(mappedItems);
+        // Update local storage to match server
+        setStorageString(key, JSON.stringify(mappedItems));
+      }
+    } catch (error) {
+      console.error('Failed to fetch cart:', error);
+    } finally {
+      setIsCartLoading(false);
+      setIsCartInitialized(true);
     }
-    loadedUserIdRef.current = user?.id;
-    setIsCartLoading(false);
   }, [user?.id]);
 
-  // ── Save cart to local storage whenever it changes ──
+  // ── Load cart when user changes ──
   useEffect(() => {
-    // Only save if we have finished loading the cart for the current user
-    if (user?.id && loadedUserIdRef.current === user.id) {
+    if (user?.id) {
+      setIsCartInitialized(false);
+      fetchCart();
+      loadedUserIdRef.current = user.id;
+    } else {
+      setCartItems([]);
+      setIsCartLoading(false);
+      setIsCartInitialized(false);
+    }
+  }, [user?.id, fetchCart]);
+
+  // ── Save cart to local storage and sync whenever it changes ──
+  useEffect(() => {
+    // Only save and sync if we have successfully initialized the cart from the server
+    if (user?.id && isCartInitialized) {
       const key = `cart_${user.id}`;
       setStorageString(key, JSON.stringify(cartItems));
+      
+      // Debounce the backend sync slightly to avoid too many requests
+      const timeoutId = setTimeout(() => {
+        syncCartWithBackend(cartItems);
+      }, 500);
+      
+      return () => clearTimeout(timeoutId);
     }
-  }, [cartItems, user?.id]);
+  }, [cartItems, user?.id, isCartInitialized, syncCartWithBackend]);
 
   // ── Build delivery address from user profile ──
   const profileAddress = useMemo(
@@ -309,25 +357,71 @@ export function CartProvider({ children }: React.PropsWithChildren) {
     setAppliedDiscount(0);
   }, [promoCode]);
 
-  const placeOrderFromCart = useCallback((paymentMethod: CheckoutPaymentOption) => {
-    const timestamp = Date.now();
-    const nextOrder: ActiveOrder = {
-      id: `ord-${timestamp}`,
-      shortId: buildOrderShortId(timestamp),
-      items: cartItems.map((item) => ({ ...item })),
-      address: { ...selectedAddress },
-      paymentMethod: { ...paymentMethod },
+  const placeOrderFromCart = useCallback(async (paymentMethod: CheckoutPaymentOption) => {
+    if (!cartItems.length) {
+      throw new Error('Cart is empty');
+    }
+
+    const payload = {
+      restaurant: cartItems[0].restaurantName || 'Unknown',
+      restaurantId: Number(cartItems[0].restaurantId),
       subtotal,
       deliveryFee,
       discount: appliedDiscount,
       total,
-      promoCode,
-      specialInstructions: specialInstructions.trim(),
-      placedAt: new Date(timestamp).toISOString(),
+      paymentMethod: paymentMethod.id,
+      deliveryAddress: selectedAddress.fullAddress,
+      contactNumber: user?.phone || 'N/A',
+      specialInstructions: specialInstructions.trim() || undefined,
+      deliveryType: 'asap',
+      items: cartItems.map((item) => ({
+        id: Number(item.id),
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price,
+        image: item.image,
+        variations: item.selectedVariation ? [item.selectedVariation] : (item.selectedAddons || []),
+      })),
+      promo_code: promoCode.trim() || undefined,
     };
 
-    setActiveOrder(nextOrder);
-    return nextOrder;
+    try {
+      const orderResponse = await apiClient<any>('/orders', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      // Clear local cart since backend clears it on success
+      setCartItems([]);
+      if (user?.id) {
+        setStorageString(`cart_${user.id}`, '[]');
+      }
+      setPromoCode('');
+      setSpecialInstructions('');
+      setAppliedDiscount(0);
+
+      const timestamp = Date.now();
+      const nextOrder: ActiveOrder = {
+        id: orderResponse.id ? String(orderResponse.id) : `ord-${timestamp}`,
+        shortId: orderResponse.id ? `#${orderResponse.id}` : buildOrderShortId(timestamp),
+        items: [...cartItems],
+        address: { ...selectedAddress },
+        paymentMethod: { ...paymentMethod },
+        subtotal,
+        deliveryFee,
+        discount: appliedDiscount,
+        total,
+        promoCode,
+        specialInstructions: specialInstructions.trim(),
+        placedAt: orderResponse.created_at || new Date().toISOString(),
+      };
+
+      setActiveOrder(nextOrder);
+      return nextOrder;
+    } catch (error) {
+      console.error('Failed to place order:', error);
+      throw error;
+    }
   }, [
     appliedDiscount,
     cartItems,
@@ -337,6 +431,8 @@ export function CartProvider({ children }: React.PropsWithChildren) {
     specialInstructions,
     subtotal,
     total,
+    user?.phone,
+    user?.id,
   ]);
 
   const clearActiveOrder = useCallback(() => {
