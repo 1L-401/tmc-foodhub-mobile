@@ -10,16 +10,38 @@ import { TmcLogo } from '@/components/tmc-logo';
 import { useAuth } from '@/contexts/auth-context';
 import { usePayment } from '@/components/payment';
 import { useCart } from '@/components/cart';
+import { apiClient } from '@/src/api/apiClient';
+import { useFocusEffect } from 'expo-router';
 
 export default function ProfileScreen() {
   const { user } = useAuth();
   const { preferredPayment } = usePayment();
-  const { activeOrder } = useCart();
-  
+  const [orderCount, setOrderCount] = React.useState(0);
+  const [latestOrder, setLatestOrder] = React.useState<any>(null);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      apiClient<any[]>('/orders').then((data) => {
+        if (data) {
+          setOrderCount(data.length);
+          if (data.length > 0) {
+            setLatestOrder(data[0]);
+          }
+        }
+      }).catch(() => {});
+    }, [])
+  );
+
   const displayName = user?.name?.trim() ? user.name : 'Unknown User';
   const displayEmail = user?.email?.trim() ? user.email : 'No email provided';
   // Use UI Avatars to generate a fallback profile picture with initials
   const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=F7E8E6&color=AC1D10&size=150`;
+
+  // Safely extract the latest order image
+  const latestOrderImageRaw = latestOrder?.items?.[0]?.image;
+  const latestOrderImageUrl = latestOrderImageRaw 
+    ? (latestOrderImageRaw.startsWith('http') ? latestOrderImageRaw : `https://foodhub.tmc-innovations.com${latestOrderImageRaw}`)
+    : 'https://images.unsplash.com/photo-1600891964092-4316c288032e?auto=format&fit=crop&w=200&q=80';
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       {/* ── Top Header ── */}
@@ -50,7 +72,7 @@ export default function ProfileScreen() {
         {/* ── Stats Row ── */}
         <Animated.View entering={FadeInDown.delay(200).duration(450)} style={styles.statsRow}>
           <View style={styles.statCol}>
-            <Text style={styles.statVal}>24</Text>
+            <Text style={styles.statVal}>{orderCount}</Text>
             <Text style={styles.statLabel}>Orders</Text>
           </View>
           <View style={styles.statDivider} />
@@ -69,23 +91,25 @@ export default function ProfileScreen() {
         <Animated.View entering={FadeInDown.delay(300).duration(450)}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recent Orders</Text>
-            <Pressable>
+            <Pressable onPress={() => router.push('/orders/history')}>
               <Text style={styles.sectionAction}>View History</Text>
             </Pressable>
           </View>
           
-          {activeOrder ? (
+          {latestOrder ? (
             <View style={styles.orderCard}>
               <Image 
-                source={{ uri: activeOrder.items[0]?.image || 'https://images.unsplash.com/photo-1600891964092-4316c288032e?auto=format&fit=crop&w=200&q=80' }} 
+                source={{ uri: latestOrderImageUrl }} 
                 style={styles.orderImg} 
               />
               <View style={styles.orderMiddle}>
-                <Text style={styles.orderTitle}>{activeOrder.items[0]?.name || 'Your Order'}</Text>
-                <Text style={styles.orderSub}>Processing • {activeOrder.items.length} items • ${activeOrder.total.toFixed(2)}</Text>
-                <Text style={styles.orderTime}>Just now</Text>
+                <Text style={styles.orderTitle}>{latestOrder.items?.[0]?.item_name || 'Your Order'}</Text>
+                <Text style={styles.orderSub}>{latestOrder.status} • {latestOrder.items?.length || 0} items • ${Number(latestOrder.total || 0).toFixed(2)}</Text>
+                <Text style={styles.orderTime}>
+                  {new Date(latestOrder.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                </Text>
               </View>
-              <Pressable style={styles.reorderBtn}>
+              <Pressable style={styles.reorderBtn} onPress={() => router.push('/orders/history')}>
                 <Text style={styles.reorderText}>Track</Text>
               </Pressable>
               <MaterialCommunityIcons name="chevron-right" size={20} color="#AAA" style={{ marginLeft: 6 }} />
