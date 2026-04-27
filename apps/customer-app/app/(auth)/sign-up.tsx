@@ -17,14 +17,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { GoogleLogo } from '@/components/google-logo';
 import { TmcLogo } from '@/components/tmc-logo';
-import { CustomerSignupPayload, OwnerSignupPayload, useAuth } from '@/contexts/auth-context';
+import { CustomerSignupPayload, useAuth } from '@/contexts/auth-context';
 
 export default function SignUpScreen() {
-  const { signUpCustomer, signUpOwner, sendSignupOtp, signUpWithGoogleCredential } = useAuth();
+  const { signUpCustomer, sendSignupOtp, signUpWithGoogleCredential } = useAuth();
   const [currentStep, setCurrentStep] = useState(1);
 
   // Step 1 State
-  const [userType, setUserType] = useState<'customer' | 'partner'>('customer');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -37,15 +36,10 @@ export default function SignUpScreen() {
   const [address, setAddress] = useState('');
   const [contactNumber, setContactNumber] = useState('');
   const [deliveryInstructions, setDeliveryInstructions] = useState('');
-  const [restaurantName, setRestaurantName] = useState('');
-  const [businessAddress, setBusinessAddress] = useState('');
-  const [businessContactNumber, setBusinessContactNumber] = useState('');
-  const [businessPermit, setBusinessPermit] = useState('');
 
   // Step 3 State
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [acceptPrivacy, setAcceptPrivacy] = useState(false);
-  const [acceptMerchantAgreement, setAcceptMerchantAgreement] = useState(false);
   const [optInNews, setOptInNews] = useState(false);
   const [emailVerificationToken, setEmailVerificationToken] = useState('');
 
@@ -113,32 +107,12 @@ export default function SignUpScreen() {
   };
 
   const validateStep2 = () => {
-    if (userType === 'customer') {
-      if (!address.trim()) {
-        return 'Please enter your address.';
-      }
-
-      if (!contactNumber.trim()) {
-        return 'Please enter your contact number.';
-      }
-
-      return null;
+    if (!address.trim()) {
+      return 'Please enter your address.';
     }
 
-    if (!restaurantName.trim()) {
-      return 'Please enter your restaurant name.';
-    }
-
-    if (!businessAddress.trim()) {
-      return 'Please enter your business address.';
-    }
-
-    if (!businessContactNumber.trim()) {
-      return 'Please enter your business contact number.';
-    }
-
-    if (!businessPermit.trim()) {
-      return 'Please enter your business permit number.';
+    if (!contactNumber.trim()) {
+      return 'Please enter your contact number.';
     }
 
     return null;
@@ -155,10 +129,6 @@ export default function SignUpScreen() {
 
     if (!acceptPrivacy) {
       return 'You need to accept Privacy Policy to continue.';
-    }
-
-    if (userType === 'partner' && !acceptMerchantAgreement) {
-      return 'You need to accept the Merchant Agreement to continue.';
     }
 
     return null;
@@ -212,7 +182,9 @@ export default function SignUpScreen() {
       return;
     }
 
-    router.replace(result.authenticated ? '/(tabs)' : '/(auth)/login');
+    if (!result.authenticated) {
+      router.replace('/(auth)/login');
+    }
   };
 
   const handleSendSignupOtp = async () => {
@@ -229,16 +201,12 @@ export default function SignUpScreen() {
     }
 
     if (Platform.OS === 'web') {
-      const endpoint = userType === 'partner'
-        ? 'https://foodhub.tmc-innovations.com/api/owner/send-otp'
-        : 'https://foodhub.tmc-innovations.com/api/send-otp';
-
       setErrorMessage(null);
       setOtpStatusMessage(null);
       setIsSendingOtp(true);
 
       try {
-        await fetch(endpoint, {
+        await fetch('https://foodhub.tmc-innovations.com/api/send-otp', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
@@ -261,7 +229,7 @@ export default function SignUpScreen() {
     setOtpStatusMessage(null);
     setIsSendingOtp(true);
 
-    const result = await sendSignupOtp(normalizedEmail, userType);
+    const result = await sendSignupOtp(normalizedEmail);
 
     setIsSendingOtp(false);
 
@@ -282,44 +250,19 @@ export default function SignUpScreen() {
     }
 
     if (Platform.OS === 'web') {
-      const trimmedBusinessAddress = businessAddress.trim();
-      const trimmedBusinessContact = businessContactNumber.trim();
-
-      const endpoint = userType === 'partner'
-        ? 'https://foodhub.tmc-innovations.com/api/owner/register'
-        : 'https://foodhub.tmc-innovations.com/api/register';
-
-      const formPayload: Record<string, string> = userType === 'partner'
-        ? {
-            email_verification_token: emailVerificationToken.trim(),
-            first_name: firstName.trim(),
-            last_name: lastName.trim(),
-            email: email.trim(),
-            password,
-            password_confirmation: confirmPassword,
-            restaurant_name: restaurantName.trim(),
-            business_address: trimmedBusinessAddress,
-            business_contact_number: trimmedBusinessContact,
-            business_permit: businessPermit.trim(),
-            terms_accepted: acceptTerms ? '1' : '0',
-            privacy_accepted: acceptPrivacy ? '1' : '0',
-            merchant_agreement_accepted: acceptMerchantAgreement ? '1' : '0',
-            phone: trimmedBusinessContact,
-            address: trimmedBusinessAddress,
-          }
-        : {
-            email_verification_token: emailVerificationToken.trim(),
-            first_name: firstName.trim(),
-            last_name: lastName.trim(),
-            email: email.trim(),
-            password,
-            password_confirmation: confirmPassword,
-            terms_accepted: acceptTerms ? '1' : '0',
-            privacy_accepted: acceptPrivacy ? '1' : '0',
-            address: address.trim(),
-            phone: contactNumber.trim(),
-            delivery_instructions: deliveryInstructions.trim(),
-          };
+      const formPayload: Record<string, string> = {
+        email_verification_token: emailVerificationToken.trim(),
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        email: email.trim(),
+        password,
+        password_confirmation: confirmPassword,
+        terms_accepted: acceptTerms ? '1' : '0',
+        privacy_accepted: acceptPrivacy ? '1' : '0',
+        address: address.trim(),
+        phone: contactNumber.trim(),
+        delivery_instructions: deliveryInstructions.trim(),
+      };
 
       const encodedBody = Object.entries(formPayload)
         .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
@@ -330,7 +273,7 @@ export default function SignUpScreen() {
       setIsSubmitting(true);
 
       try {
-        await fetch(endpoint, {
+        await fetch('https://foodhub.tmc-innovations.com/api/register', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
@@ -352,55 +295,21 @@ export default function SignUpScreen() {
     setErrorMessage(null);
     setIsSubmitting(true);
 
-    if (userType === 'customer') {
-      const payload: CustomerSignupPayload = {
-        email_verification_token: emailVerificationToken.trim(),
-        first_name: firstName.trim(),
-        last_name: lastName.trim(),
-        email: email.trim(),
-        password,
-        password_confirmation: confirmPassword,
-        terms_accepted: acceptTerms,
-        privacy_accepted: acceptPrivacy,
-        address: address.trim(),
-        phone: contactNumber.trim(),
-        delivery_instructions: deliveryInstructions.trim(),
-      };
-
-      const result = await signUpCustomer(payload);
-      setIsSubmitting(false);
-
-      if (!result.success) {
-        setErrorMessage(result.error);
-        return;
-      }
-
-      router.replace(result.authenticated ? '/(tabs)' : '/(auth)/login');
-      return;
-    }
-
-    const trimmedBusinessAddress = businessAddress.trim();
-    const trimmedBusinessContact = businessContactNumber.trim();
-
-    const payload: OwnerSignupPayload = {
+    const payload: CustomerSignupPayload = {
       email_verification_token: emailVerificationToken.trim(),
       first_name: firstName.trim(),
       last_name: lastName.trim(),
       email: email.trim(),
       password,
       password_confirmation: confirmPassword,
-      restaurant_name: restaurantName.trim(),
-      business_address: trimmedBusinessAddress,
-      business_contact_number: trimmedBusinessContact,
-      business_permit: businessPermit.trim(),
       terms_accepted: acceptTerms,
       privacy_accepted: acceptPrivacy,
-      merchant_agreement_accepted: acceptMerchantAgreement,
-      phone: trimmedBusinessContact,
-      address: trimmedBusinessAddress,
+      address: address.trim(),
+      phone: contactNumber.trim(),
+      delivery_instructions: deliveryInstructions.trim(),
     };
 
-    const result = await signUpOwner(payload);
+    const result = await signUpCustomer(payload);
     setIsSubmitting(false);
 
     if (!result.success) {
@@ -408,7 +317,9 @@ export default function SignUpScreen() {
       return;
     }
 
-    router.replace(result.authenticated ? '/(tabs)' : '/(auth)/login');
+    if (!result.authenticated) {
+      router.replace('/(auth)/login');
+    }
   };
 
   const getProgressDetails = () => {
@@ -419,9 +330,7 @@ export default function SignUpScreen() {
     if (currentStep === 2) {
       return {
         width: '66%',
-        text: userType === 'partner'
-          ? 'Step 2 of 3: Business Information'
-          : 'Step 2 of 3: Delivery Information',
+        text: 'Step 2 of 3: Delivery Information',
         percent: '66% Complete',
       };
     }
@@ -436,36 +345,6 @@ export default function SignUpScreen() {
   // --------------------------------------------------------
   const renderStep1 = () => (
     <Animated.View key="step1" entering={FadeInDown.springify()} exiting={FadeOutLeft} style={styles.formSection}>
-      <View style={styles.inputContainer}>
-        <Text style={styles.label}>I am a...</Text>
-        <View style={styles.segmentedControl}>
-          <Pressable
-            style={[styles.segmentButton, userType === 'customer' && styles.segmentButtonActive]}
-            onPress={() => {
-              setUserType('customer');
-              setOtpStatusMessage(null);
-              clearError();
-            }}
-          >
-            <Text style={[styles.segmentText, userType === 'customer' && styles.segmentTextActive]}>
-              Customer
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[styles.segmentButton, userType === 'partner' && styles.segmentButtonActive]}
-            onPress={() => {
-              setUserType('partner');
-              setOtpStatusMessage(null);
-              clearError();
-            }}
-          >
-            <Text style={[styles.segmentText, userType === 'partner' && styles.segmentTextActive]}>
-              Restaurant Partner
-            </Text>
-          </Pressable>
-        </View>
-      </View>
-
       <View style={styles.inputContainer}>
         <Text style={styles.label}>Name</Text>
         <View style={styles.nameRow}>
@@ -618,144 +497,63 @@ export default function SignUpScreen() {
   // --------------------------------------------------------
   const renderStep2 = () => (
     <Animated.View key="step2" entering={FadeInUp.springify()} exiting={FadeOutLeft} style={styles.formSection}>
-      <Text style={styles.sectionHeader}>
-        {userType === 'partner'
-          ? 'Set up your business information'
-          : 'Set up your delivery information'}
-      </Text>
+      <Text style={styles.sectionHeader}>Set up your delivery information</Text>
 
-      {userType === 'customer' ? (
-        <>
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Default Address</Text>
-            <View style={[styles.inputWrapper, styles.multiLineWrapper]}>
-              <TextInput
-                style={styles.multiLineInput}
-                placeholder="Enter full unit/building number, street, and barangay"
-                placeholderTextColor="#A0A0A0"
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-                value={address}
-                onChangeText={(value) => {
-                  setAddress(value);
-                  clearError();
-                }}
-              />
-            </View>
-          </View>
+      <View style={styles.inputContainer}>
+        <Text style={styles.label}>Default Address</Text>
+        <View style={[styles.inputWrapper, styles.multiLineWrapper]}>
+          <TextInput
+            style={styles.multiLineInput}
+            placeholder="Enter full unit/building number, street, and barangay"
+            placeholderTextColor="#A0A0A0"
+            multiline
+            numberOfLines={4}
+            textAlignVertical="top"
+            value={address}
+            onChangeText={(value) => {
+              setAddress(value);
+              clearError();
+            }}
+          />
+        </View>
+      </View>
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Contact Number</Text>
-            <View style={styles.inputWrapper}>
-              <MaterialCommunityIcons name="phone-outline" size={20} color="#A0A0A0" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="+63 000 000 0000"
-                placeholderTextColor="#A0A0A0"
-                keyboardType="phone-pad"
-                value={contactNumber}
-                onChangeText={(value) => {
-                  setContactNumber(value);
-                  clearError();
-                }}
-              />
-            </View>
-          </View>
+      <View style={styles.inputContainer}>
+        <Text style={styles.label}>Contact Number</Text>
+        <View style={styles.inputWrapper}>
+          <MaterialCommunityIcons name="phone-outline" size={20} color="#A0A0A0" style={styles.inputIcon} />
+          <TextInput
+            style={styles.input}
+            placeholder="+63 000 000 0000"
+            placeholderTextColor="#A0A0A0"
+            keyboardType="phone-pad"
+            value={contactNumber}
+            onChangeText={(value) => {
+              setContactNumber(value);
+              clearError();
+            }}
+          />
+        </View>
+      </View>
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Delivery Instructions</Text>
-            <View style={[styles.inputWrapper, styles.multiLineWrapper]}>
-              <TextInput
-                style={styles.multiLineInput}
-                placeholder="Gate codes, drop-off preferences, or landmarks..."
-                placeholderTextColor="#A0A0A0"
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-                value={deliveryInstructions}
-                onChangeText={(value) => {
-                  setDeliveryInstructions(value);
-                  clearError();
-                }}
-              />
-            </View>
-          </View>
-        </>
-      ) : (
-        <>
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Restaurant Name</Text>
-            <View style={styles.inputWrapper}>
-              <MaterialCommunityIcons name="store-outline" size={20} color="#A0A0A0" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. Maria Kitchen"
-                placeholderTextColor="#A0A0A0"
-                value={restaurantName}
-                onChangeText={(value) => {
-                  setRestaurantName(value);
-                  clearError();
-                }}
-              />
-            </View>
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Business Address</Text>
-            <View style={[styles.inputWrapper, styles.multiLineWrapper]}>
-              <TextInput
-                style={styles.multiLineInput}
-                placeholder="Enter complete business address"
-                placeholderTextColor="#A0A0A0"
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-                value={businessAddress}
-                onChangeText={(value) => {
-                  setBusinessAddress(value);
-                  clearError();
-                }}
-              />
-            </View>
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Business Contact Number</Text>
-            <View style={styles.inputWrapper}>
-              <MaterialCommunityIcons name="phone-outline" size={20} color="#A0A0A0" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. 09179876543"
-                placeholderTextColor="#A0A0A0"
-                keyboardType="phone-pad"
-                value={businessContactNumber}
-                onChangeText={(value) => {
-                  setBusinessContactNumber(value);
-                  clearError();
-                }}
-              />
-            </View>
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Business Permit</Text>
-            <View style={styles.inputWrapper}>
-              <MaterialCommunityIcons name="file-document-outline" size={20} color="#A0A0A0" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. BP-2026-00123"
-                placeholderTextColor="#A0A0A0"
-                value={businessPermit}
-                onChangeText={(value) => {
-                  setBusinessPermit(value);
-                  clearError();
-                }}
-              />
-            </View>
-          </View>
-        </>
-      )}
+      <View style={styles.inputContainer}>
+        <Text style={styles.label}>Delivery Instructions</Text>
+        <View style={[styles.inputWrapper, styles.multiLineWrapper]}>
+          <TextInput
+            style={styles.multiLineInput}
+            placeholder="Gate codes, drop-off preferences, or landmarks..."
+            placeholderTextColor="#A0A0A0"
+            multiline
+            numberOfLines={4}
+            textAlignVertical="top"
+            value={deliveryInstructions}
+            onChangeText={(value) => {
+              setDeliveryInstructions(value);
+              clearError();
+            }}
+          />
+        </View>
+      </View>
 
       {/* Footer Navigation */}
       <View style={styles.footerRowNavigation}>
@@ -823,36 +621,13 @@ export default function SignUpScreen() {
         </View>
       </Pressable>
 
-      {userType === 'partner' ? (
-        <Pressable
-          style={[styles.checkboxCard, acceptMerchantAgreement && styles.checkboxCardActive]}
-          onPress={() => {
-            setAcceptMerchantAgreement(!acceptMerchantAgreement);
-            clearError();
-          }}
-        >
-          <MaterialCommunityIcons
-            name={acceptMerchantAgreement ? 'circle' : 'circle-outline'}
-            size={24}
-            color={acceptMerchantAgreement ? '#AC1D10' : '#D4D4D4'}
-            style={styles.cardIcon}
-          />
-          <View style={styles.cardTextContainer}>
-            <Text style={styles.cardTitle}>Accept Merchant Agreement</Text>
-            <Text style={styles.cardSubtitle}>
-              I agree to the merchant onboarding and operations terms.
-            </Text>
-          </View>
-        </Pressable>
-      ) : null}
-
       <View style={styles.inputContainer}>
         <Text style={styles.label}>Email Verification Token</Text>
         <View style={styles.inputWrapper}>
           <MaterialCommunityIcons name="shield-key-outline" size={20} color="#A0A0A0" style={styles.inputIcon} />
           <TextInput
             style={styles.input}
-            placeholder={userType === 'partner' ? 'token_from_owner_verify_otp' : 'token_from_verify_otp'}
+            placeholder="token_from_verify_otp"
             placeholderTextColor="#A0A0A0"
             autoCapitalize="none"
             autoCorrect={false}
@@ -937,11 +712,7 @@ export default function SignUpScreen() {
           {/* Title & Progress */}
           <View style={styles.titleSection}>
             <Text style={styles.mainTitle}>
-              {currentStep === 1
-                ? 'Sign up as a Customer or Restaurant Partner'
-                : userType === 'partner'
-                  ? 'Sign up as a Restaurant Partner'
-                  : 'Sign up as a Customer'}
+              Sign up as a Customer
             </Text>
             
             <View style={styles.progressContainer}>

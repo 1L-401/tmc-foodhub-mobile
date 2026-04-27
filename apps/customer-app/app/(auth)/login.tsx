@@ -44,6 +44,10 @@ export default function LoginScreen() {
     }
   };
 
+  const handleSocialLoginUnavailable = (provider: 'Google' | 'Facebook') => {
+    setErrorMessage(`${provider} login is not available yet.`);
+  };
+
   const handleLogin = async () => {
     const normalizedEmail = email.trim();
 
@@ -64,7 +68,10 @@ export default function LoginScreen() {
     }
 
     setIsLoading(false);
-    router.replace('/(tabs)');
+
+    if (!result.authenticated) {
+      setErrorMessage('Unable to complete sign in. Please try again.');
+    }
   };
 
   return (
@@ -190,14 +197,14 @@ export default function LoginScreen() {
           <Animated.View entering={FadeInDown.delay(250).springify()} style={styles.socialSection}>
             <Pressable
               style={styles.socialButton}
-              onPress={() => router.replace('/(tabs)')}
+              onPress={() => handleSocialLoginUnavailable('Google')}
             >
               <GoogleLogo />
               <Text style={styles.socialButtonText}>Continue with Google</Text>
             </Pressable>
             <Pressable
               style={styles.socialButton}
-              onPress={() => router.replace('/(tabs)')}
+              onPress={() => handleSocialLoginUnavailable('Facebook')}
             >
               <MaterialCommunityIcons name="facebook" size={24} color="#4267B2" />
               <Text style={styles.socialButtonText}>Continue with Facebook</Text>

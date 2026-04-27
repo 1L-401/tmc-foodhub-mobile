@@ -15,26 +15,27 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 
 function RootStack() {
   const segments = useSegments();
-  const { isAuthenticated, isReady } = useAuth();
+  const { isAuthenticated, isReady, user } = useAuth();
 
   useEffect(() => {
     if (!isReady) {
       return;
     }
 
+    const hasCustomerSession = isAuthenticated && user?.role === 'customer';
     const currentSegment = segments[0];
     const inAuthGroup = currentSegment === '(auth)';
-    const isPublicRoute = !currentSegment || currentSegment === 'index' || currentSegment === 'get-started';
+    const isPublicRoute = !currentSegment || currentSegment === 'get-started';
 
-    if (!isAuthenticated && !inAuthGroup && !isPublicRoute) {
+    if (!hasCustomerSession && !inAuthGroup && !isPublicRoute) {
       router.replace('/(auth)/login');
       return;
     }
 
-    if (isAuthenticated && (inAuthGroup || isPublicRoute)) {
+    if (hasCustomerSession && (inAuthGroup || isPublicRoute)) {
       router.replace('/(tabs)');
     }
-  }, [isAuthenticated, isReady, segments]);
+  }, [isAuthenticated, isReady, segments, user]);
 
   if (!isReady) {
     return (
