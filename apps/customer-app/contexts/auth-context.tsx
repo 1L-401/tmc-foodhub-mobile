@@ -4,15 +4,17 @@ import * as SecureStore from 'expo-secure-store';
 
 const LOGIN_URL = 'https://foodhub.tmc-innovations.com/api/login';
 const REGISTER_URL = 'https://foodhub.tmc-innovations.com/api/register';
-const OWNER_REGISTER_URL = 'https://foodhub.tmc-innovations.com/api/owner/register';
 const GOOGLE_SIGNUP_URL = 'https://foodhub.tmc-innovations.com/api/auth/google-signup';
 const SEND_OTP_URL = 'https://foodhub.tmc-innovations.com/api/send-otp';
-const OWNER_SEND_OTP_URL = 'https://foodhub.tmc-innovations.com/api/owner/send-otp';
 const FORGOT_PASSWORD_URL = 'https://foodhub.tmc-innovations.com/api/forgot-password';
 const VERIFY_RESET_OTP_URL = 'https://foodhub.tmc-innovations.com/api/verify-reset-otp';
 const RESET_PASSWORD_URL = 'https://foodhub.tmc-innovations.com/api/reset-password';
 const CHANGE_PASSWORD_URL = 'https://foodhub.tmc-innovations.com/api/user/password';
 const USER_PROFILE_URL = 'https://foodhub.tmc-innovations.com/api/user';
+
+const GENERIC_AUTH_FAILURE_MESSAGE = 'Login failed. Please check your credentials.';
+
+type AuthRole = 'customer';
 
 export type AuthUser = {
   id: number;
@@ -23,7 +25,7 @@ export type AuthUser = {
   avatar?: string;
   email_verified?: boolean;
   email_verified_at?: string;
-  role?: string;
+  role: string;
   address?: string;
   phone?: string;
   delivery_instructions?: string;
@@ -135,24 +137,6 @@ export type CustomerSignupPayload = {
   delivery_instructions: string;
 };
 
-export type OwnerSignupPayload = {
-  email_verification_token: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  password: string;
-  password_confirmation: string;
-  restaurant_name: string;
-  business_address: string;
-  business_contact_number: string;
-  business_permit: string;
-  terms_accepted: boolean;
-  privacy_accepted: boolean;
-  merchant_agreement_accepted: boolean;
-  phone: string;
-  address: string;
-};
-
 type AuthContextValue = {
   token: string | null;
   user: AuthUser | null;
@@ -160,8 +144,7 @@ type AuthContextValue = {
   isReady: boolean;
   signInWithCredentials: (email: string, password: string) => Promise<AuthActionResult>;
   signUpCustomer: (payload: CustomerSignupPayload) => Promise<AuthActionResult>;
-  signUpOwner: (payload: OwnerSignupPayload) => Promise<AuthActionResult>;
-  sendSignupOtp: (email: string, userType: 'customer' | 'partner') => Promise<OtpActionResult>;
+  sendSignupOtp: (email: string) => Promise<OtpActionResult>;
   requestPasswordReset: (email: string) => Promise<PasswordResetRequestResult>;
   verifyPasswordResetOtp: (email: string, otp: string) => Promise<PasswordResetVerificationResult>;
   resetPasswordWithToken: (
@@ -363,7 +346,7 @@ function isAuthUser(payload: unknown): payload is AuthUser {
     return false;
   }
 
-  if (candidate.role !== undefined && typeof candidate.role !== 'string') {
+  if (typeof candidate.role !== 'string' || !candidate.role.trim()) {
     return false;
   }
 
@@ -380,17 +363,36 @@ function extractOptionalBoolean(obj: Record<string, unknown>, key: string): bool
   return typeof val === 'boolean' ? val : undefined;
 }
 
+function normalizeRole(rawRole: string): string {
+  return rawRole.trim().toLowerCase();
+}
+
+function isCustomerRole(role: string): role is AuthRole {
+  return normalizeRole(role) === 'customer';
+}
+
+function logSecurityEvent(event: string, details?: Record<string, unknown>) {
+  console.warn('[auth-security]', event, details ?? {});
+}
+
 function parseUserWithExtras(raw: unknown): AuthUser | null {
   if (!isAuthUser(raw)) {
     return null;
   }
 
   const obj = raw as Record<string, unknown>;
+  const normalizedRole = normalizeRole(raw.role);
+
+  if (!normalizedRole) {
+    return null;
+  }
+
   const emailVerifiedAt = extractOptionalString(obj, 'email_verified_at');
   const explicitEmailVerified = extractOptionalBoolean(obj, 'email_verified');
 
   return {
     ...raw,
+    role: normalizedRole,
     first_name: extractOptionalString(obj, 'first_name'),
     last_name: extractOptionalString(obj, 'last_name'),
     avatar: extractOptionalString(obj, 'avatar'),
@@ -407,23 +409,42 @@ function parseUserWithExtras(raw: unknown): AuthUser | null {
   };
 }
 
-function parseAuthResponse(payload: unknown): { token: string; user: AuthUser | null } | null {
+function parseAuthResponse(payload: unknown): { token: string | null; user: AuthUser | null } {
   if (typeof payload !== 'object' || payload === null) {
-    return null;
+    return {
+      token: null,
+      user: null,
+    };
   }
 
-  const candidate = payload as {
+  const candidate = payload as Record<string, unknown>;
+  const dataPayload =
+    typeof candidate.data === 'object' && candidate.data !== null
+      ? (candidate.data as Record<string, unknown>)
+      : null;
+
+  const token =
+    extractOptionalString(candidate, 'token')
+    ?? extractOptionalString(candidate, 'access_token')
+    ?? (dataPayload
+      ? extractOptionalString(dataPayload, 'token') ?? extractOptionalString(dataPayload, 'access_token')
+      : undefined)
+    ?? null;
+
+  const userPayload = (payload as {
     token?: unknown;
     user?: unknown;
-  };
+    data?: unknown;
+  }).user;
 
-  if (typeof candidate.token !== 'string' || !candidate.token.trim()) {
-    return null;
-  }
+  const nestedUserPayload =
+    dataPayload && dataPayload.user !== undefined
+      ? dataPayload.user
+      : undefined;
 
   return {
-    token: candidate.token,
-    user: parseUserWithExtras(candidate.user),
+    token,
+    user: parseUserWithExtras(userPayload ?? nestedUserPayload),
   };
 }
 
@@ -558,6 +579,15 @@ async function clearStoredAuth() {
   await SecureStore.deleteItemAsync('auth_user');
 }
 
+type ApplyAuthPayloadResult =
+  | {
+      authenticated: true;
+    }
+  | {
+      authenticated: false;
+      reason: 'missing-token' | 'invalid-user' | 'role-mismatch';
+    };
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -567,31 +597,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async function loadStoredAuth() {
       try {
         let storedToken = null;
-        let storedUser = null;
+        let storedUser: unknown = null;
 
         if (Platform.OS === 'web') {
           storedToken = localStorage.getItem('auth_token');
           const userStr = localStorage.getItem('auth_user');
           if (userStr) {
             try {
-               storedUser = JSON.parse(userStr);
-            } catch (e) {}
+              storedUser = JSON.parse(userStr);
+            } catch {}
           }
         } else {
           storedToken = await SecureStore.getItemAsync('auth_token');
           const userStr = await SecureStore.getItemAsync('auth_user');
           if (userStr) {
-             try {
-               storedUser = JSON.parse(userStr);
-             } catch (e) {}
+            try {
+              storedUser = JSON.parse(userStr);
+            } catch {}
           }
         }
 
-        if (storedToken) {
+        const parsedStoredUser = parseUserWithExtras(storedUser);
+
+        if (storedToken && parsedStoredUser && isCustomerRole(parsedStoredUser.role)) {
           setToken(storedToken);
-          if (storedUser) {
-            setUser(storedUser);
-          }
+          setUser(parsedStoredUser);
+        } else if (storedToken || storedUser) {
+          logSecurityEvent('clearing_invalid_stored_session', {
+            hasToken: Boolean(storedToken),
+            role: parsedStoredUser?.role ?? null,
+          });
+
+          setToken(null);
+          setUser(null);
+          await clearStoredAuth();
         }
       } catch (e) {
         console.error('Failed to load auth data', e);
@@ -647,17 +686,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const applyAuthPayload = useCallback(async (payload: unknown) => {
+  const applyAuthPayload = useCallback(async (payload: unknown): Promise<ApplyAuthPayloadResult> => {
     const parsed = parseAuthResponse(payload);
 
-    if (!parsed) {
-      return false;
+    if (!parsed.token) {
+      return {
+        authenticated: false,
+        reason: 'missing-token',
+      };
+    }
+
+    if (!parsed.user) {
+      logSecurityEvent('rejected_auth_payload_missing_user');
+      return {
+        authenticated: false,
+        reason: 'invalid-user',
+      };
+    }
+
+    if (!isCustomerRole(parsed.user.role)) {
+      logSecurityEvent('rejected_non_customer_auth_payload', {
+        role: parsed.user.role,
+      });
+
+      return {
+        authenticated: false,
+        reason: 'role-mismatch',
+      };
     }
 
     setToken(parsed.token);
     setUser(parsed.user);
     await setStoredAuth(parsed.token, parsed.user);
-    return true;
+    return {
+      authenticated: true,
+    };
   }, []);
 
   const signInWithCredentials = useCallback(async (email: string, password: string): Promise<AuthActionResult> => {
@@ -667,15 +730,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!result.ok) {
         return {
           success: false,
-          error: getServerErrorMessage(result.payload) ?? 'Login failed. Please check your credentials.',
+          error: getServerErrorMessage(result.payload) ?? GENERIC_AUTH_FAILURE_MESSAGE,
         };
       }
 
       const applied = await applyAuthPayload(result.payload);
-      if (!applied) {
+      if (!applied.authenticated) {
         return {
           success: false,
-          error: 'Login response is missing a valid token. Please try again.',
+          error: GENERIC_AUTH_FAILURE_MESSAGE,
         };
       }
 
@@ -703,33 +766,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       const applied = await applyAuthPayload(result.payload);
-      return {
-        success: true,
-        authenticated: applied,
-      };
-    } catch {
-      return {
-        success: false,
-        error: 'Unable to connect to the server. Please try again.',
-      };
-    }
-  }, [applyAuthPayload, postJson]);
 
-  const signUpOwner = useCallback(async (payload: OwnerSignupPayload): Promise<AuthActionResult> => {
-    try {
-      const result = await postJson(OWNER_REGISTER_URL, payload as Record<string, unknown>);
+      if (!applied.authenticated) {
+        if (applied.reason === 'missing-token') {
+          return {
+            success: true,
+            authenticated: false,
+          };
+        }
 
-      if (!result.ok) {
         return {
           success: false,
-          error: getServerErrorMessage(result.payload) ?? 'Unable to create your owner account.',
+          error: GENERIC_AUTH_FAILURE_MESSAGE,
         };
       }
 
-      const applied = await applyAuthPayload(result.payload);
       return {
         success: true,
-        authenticated: applied,
+        authenticated: true,
       };
     } catch {
       return {
@@ -739,10 +793,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [applyAuthPayload, postJson]);
 
-  const sendSignupOtp = useCallback(async (
-    email: string,
-    userType: 'customer' | 'partner',
-  ): Promise<OtpActionResult> => {
+  const sendSignupOtp = useCallback(async (email: string): Promise<OtpActionResult> => {
     const normalizedEmail = email.trim().toLowerCase();
 
     if (!normalizedEmail) {
@@ -752,10 +803,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
     }
 
-    const endpoint = userType === 'partner' ? OWNER_SEND_OTP_URL : SEND_OTP_URL;
-
     try {
-      const result = await postForm(endpoint, { email: normalizedEmail });
+      const result = await postForm(SEND_OTP_URL, { email: normalizedEmail });
 
       if (!result.ok) {
         if (result.status === 429) {
@@ -1116,9 +1165,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       const applied = await applyAuthPayload(result.payload);
+
+      if (!applied.authenticated) {
+        if (applied.reason === 'missing-token') {
+          return {
+            success: true,
+            authenticated: false,
+          };
+        }
+
+        return {
+          success: false,
+          error: GENERIC_AUTH_FAILURE_MESSAGE,
+        };
+      }
+
       return {
         success: true,
-        authenticated: applied,
+        authenticated: true,
       };
     } catch {
       return {
@@ -1148,10 +1212,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const payload = await response.json();
       const freshUser = parseUserWithExtras(extractUserPayload(payload));
 
-      if (freshUser) {
-        setUser(freshUser);
-        await setStoredAuth(token, freshUser);
+      if (!freshUser || !isCustomerRole(freshUser.role)) {
+        logSecurityEvent('clearing_session_after_invalid_profile_refresh', {
+          role: freshUser?.role ?? null,
+        });
+        setToken(null);
+        setUser(null);
+        await clearStoredAuth();
+        return;
       }
+
+      setUser(freshUser);
+      await setStoredAuth(token, freshUser);
     } catch {
       // Silently ignore — profile refresh is best-effort
     }
@@ -1167,11 +1239,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => ({
       token,
       user,
-      isAuthenticated: Boolean(token),
+      isAuthenticated: Boolean(token && user && isCustomerRole(user.role)),
       isReady,
       signInWithCredentials,
       signUpCustomer,
-      signUpOwner,
       sendSignupOtp,
       requestPasswordReset,
       verifyPasswordResetOtp,
@@ -1188,7 +1259,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isReady,
       signInWithCredentials,
       signUpCustomer,
-      signUpOwner,
       sendSignupOtp,
       requestPasswordReset,
       verifyPasswordResetOtp,

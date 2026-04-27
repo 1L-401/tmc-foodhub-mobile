@@ -13,8 +13,16 @@ TMC Foodhub Mobile is a cross-platform mobile application built using **React Na
 ## Features
 
 - **Get Started Screen**: Introduction screen with dynamic sizing and fluid layouts.
-- **Login Flow**: Complete authentication UI tailored to brand specifications, including custom inputs, Google/Facebook login integrations, and interactive cascading components.
+- **Login Flow**: Complete authentication UI tailored to brand specifications, including custom inputs and protected route gating.
 - **Tab Navigation**: Standard bottom-tab exploration routing.
+
+## Authentication Policy
+
+- Customer app sessions are authorized only for identities with role `customer`.
+- Session hydration rejects and clears any stored session that is missing a valid user role or has a non-customer role.
+- Protected navigation is role-aware and redirects to login unless a valid customer session is present.
+- Partner/owner registration and OTP endpoints are not part of the customer app auth flow.
+- Placeholder social login buttons do not establish a session until real provider flows are wired.
 
 ## Prerequisites
 
