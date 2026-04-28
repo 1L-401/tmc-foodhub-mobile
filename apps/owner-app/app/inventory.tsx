@@ -1,8 +1,12 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Image,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,143 +18,80 @@ import Animated, { FadeInDown, FadeInRight } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CustomToggle } from '@/components/custom-toggle';
+import {
+  createInventoryItem,
+  deleteInventoryItem,
+  fetchInventoryCategories,
+  fetchInventoryItems,
+  inventoryQueryKeys,
+  updateInventoryItem,
+  updateInventoryItemAvailability,
+  updateInventoryItemStock,
+  type InventoryCategory,
+  type InventoryMenuItem,
+  type InventoryMenuItemInput,
+} from '@/services/inventoryService';
 
 /* ─── Types ─── */
 type StockStatus = 'available' | 'low_stock' | 'out_of_stock';
-type Category = 'All Categories' | 'Burgers' | 'Main Courses' | 'Coffee' | 'Fries' | 'Desserts' | 'Drinks';
+type StatusFilter = 'All' | StockStatus;
+type CategoryOption = { id: number | 'all'; name: string };
 
-interface InventoryItem {
-  id: string;
-  name: string;
-  category: string;
-  stock: number;
-  status: StockStatus;
-  available: boolean;
-  image: string;
-  price: number;
-}
+type InventoryDisplayItem = InventoryMenuItem & {
+  displayName: string;
+  displayCategory: string;
+  displayStock: number;
+  displayStatus: StockStatus;
+};
 
-/* ─── Mock Inventory Data ─── */
-const INVENTORY_ITEMS: InventoryItem[] = [
-  {
-    id: '1',
-    name: 'Double Cheese Burger',
-    category: 'Burgers',
-    stock: 5,
-    status: 'low_stock',
-    available: true,
-    image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=120&h=120&fit=crop',
-    price: 7.00,
-  },
-  {
-    id: '2',
-    name: 'Grilled Steak',
-    category: 'Main Courses',
-    stock: 28,
-    status: 'available',
-    available: true,
-    image: 'https://images.unsplash.com/photo-1600891964092-4316c288032e?w=120&h=120&fit=crop',
-    price: 12.00,
-  },
-  {
-    id: '3',
-    name: 'Black Iced Coffee',
-    category: 'Coffee',
-    stock: 0,
-    status: 'out_of_stock',
-    available: false,
-    image: 'https://images.unsplash.com/photo-1461023058943-07fcbe16d735?w=120&h=120&fit=crop',
-    price: 3.00,
-  },
-  {
-    id: '4',
-    name: 'Fries',
-    category: 'Fries',
-    stock: 18,
-    status: 'available',
-    available: true,
-    image: 'https://images.unsplash.com/photo-1573080496219-bb080dd4f877?w=120&h=120&fit=crop',
-    price: 4.50,
-  },
-  {
-    id: '5',
-    name: 'Sushi',
-    category: 'Main Courses',
-    stock: 25,
-    status: 'low_stock',
-    available: true,
-    image: 'https://images.unsplash.com/photo-1579584425555-c3ce17fd4351?w=120&h=120&fit=crop',
-    price: 15.00,
-  },
-  {
-    id: '6',
-    name: 'Chocolate Cake',
-    category: 'Desserts',
-    stock: 12,
-    status: 'available',
-    available: true,
-    image: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=120&h=120&fit=crop',
-    price: 6.50,
-  },
-  {
-    id: '7',
-    name: 'Classic Burger',
-    category: 'Burgers',
-    stock: 0,
-    status: 'out_of_stock',
-    available: false,
-    image: 'https://images.unsplash.com/photo-1550547660-d9450f859349?w=120&h=120&fit=crop',
-    price: 8.50,
-  },
-  {
-    id: '8',
-    name: 'Iced Latte',
-    category: 'Coffee',
-    stock: 3,
-    status: 'low_stock',
-    available: true,
-    image: 'https://images.unsplash.com/photo-1517701550927-30cf4ba1dba5?w=120&h=120&fit=crop',
-    price: 4.00,
-  },
-  {
-    id: '9',
-    name: 'Lemonade',
-    category: 'Drinks',
-    stock: 40,
-    status: 'available',
-    available: true,
-    image: 'https://images.unsplash.com/photo-1621263764928-df1444c5e859?w=120&h=120&fit=crop',
-    price: 2.50,
-  },
-  {
-    id: '10',
-    name: 'Veggie Bowl Special',
-    category: 'Main Courses',
-    stock: 8,
-    status: 'low_stock',
-    available: true,
-    image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=120&h=120&fit=crop',
-    price: 12.50,
-  },
-];
-
-const CATEGORIES: Category[] = [
-  'All Categories',
-  'Burgers',
-  'Main Courses',
-  'Coffee',
-  'Fries',
-  'Desserts',
-  'Drinks',
-];
-
-type StatusFilter = 'All' | 'available' | 'low_stock' | 'out_of_stock';
 const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
   { key: 'All', label: 'All' },
   { key: 'available', label: 'Available' },
   { key: 'low_stock', label: 'Low Stock' },
   { key: 'out_of_stock', label: 'Out of Stock' },
 ];
+
+const DEFAULT_LOW_STOCK_THRESHOLD = 5;
+
+const resolveStockStatus = (item: InventoryMenuItem): StockStatus => {
+  const stockLevel = item.stock_level ?? 0;
+  if (stockLevel <= 0) {
+    return 'out_of_stock';
+  }
+
+  const threshold = item.min_threshold ?? DEFAULT_LOW_STOCK_THRESHOLD;
+  if (threshold > 0 && stockLevel <= threshold) {
+    return 'low_stock';
+  }
+
+  return 'available';
+};
+
+const resolveCategoryName = (
+  item: InventoryMenuItem,
+  categoryNameById: Map<number, string>,
+) => {
+  if (item.category?.name) {
+    return item.category.name;
+  }
+
+  if (item.category_id != null) {
+    return categoryNameById.get(item.category_id) ?? 'Uncategorized';
+  }
+
+  return 'Uncategorized';
+};
+
+const toDisplayItem = (
+  item: InventoryMenuItem,
+  categoryNameById: Map<number, string>,
+): InventoryDisplayItem => ({
+  ...item,
+  displayName: item.title || 'Untitled item',
+  displayCategory: resolveCategoryName(item, categoryNameById),
+  displayStock: item.stock_level ?? 0,
+  displayStatus: resolveStockStatus(item),
+});
 
 /* ─── Status Badge ─── */
 function StockBadge({ status }: { status: StockStatus }) {
@@ -224,40 +165,460 @@ function DropdownButton({
   );
 }
 
+/* ─── Stock Update Modal ─── */
+function StockUpdateModal({
+  visible,
+  item,
+  onClose,
+  onSave,
+  isSaving,
+}: {
+  visible: boolean;
+  item: InventoryMenuItem | null;
+  onClose: () => void;
+  onSave: (stockLevel: number) => void;
+  isSaving: boolean;
+}) {
+  const [stockLevel, setStockLevel] = useState('0');
+
+  useEffect(() => {
+    if (visible && item) {
+      setStockLevel(String(item.stock_level ?? 0));
+    }
+  }, [item, visible]);
+
+  if (!item) {
+    return null;
+  }
+
+  const handleSave = () => {
+    const parsedStock = Number(stockLevel);
+    if (!Number.isFinite(parsedStock) || parsedStock < 0) {
+      Alert.alert('Validation', 'Please enter a valid stock level.');
+      return;
+    }
+
+    onSave(parsedStock);
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}>
+      <View style={stockModalStyles.overlay}>
+        <View style={stockModalStyles.card}>
+          <View style={stockModalStyles.header}>
+            <Text style={stockModalStyles.headerTitle}>Update Stock</Text>
+            <Pressable onPress={onClose}>
+              <MaterialCommunityIcons name="close" size={20} color="#666" />
+            </Pressable>
+          </View>
+
+          <Text style={stockModalStyles.subtitle}>{item.title}</Text>
+
+          <View style={stockModalStyles.field}>
+            <Text style={stockModalStyles.label}>Stock Level</Text>
+            <TextInput
+              style={stockModalStyles.input}
+              value={stockLevel}
+              onChangeText={setStockLevel}
+              keyboardType="number-pad"
+              placeholder="0"
+              placeholderTextColor="#AAA"
+            />
+          </View>
+
+          <View style={stockModalStyles.buttonRow}>
+            <Pressable
+              style={({ pressed }) => [
+                stockModalStyles.cancelBtn,
+                pressed && { opacity: 0.7 },
+              ]}
+              onPress={onClose}
+              disabled={isSaving}>
+              <Text style={stockModalStyles.cancelBtnText}>Cancel</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                stockModalStyles.saveBtn,
+                pressed && { opacity: 0.8 },
+                isSaving && { opacity: 0.6 },
+              ]}
+              onPress={handleSave}
+              disabled={isSaving}>
+              <Text style={stockModalStyles.saveBtnText}>
+                {isSaving ? 'Saving...' : 'Update'}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+/* ─── Item Form Modal ─── */
+function ItemFormModal({
+  visible,
+  item,
+  categories,
+  onClose,
+  onSubmit,
+  isSaving,
+}: {
+  visible: boolean;
+  item: InventoryMenuItem | null;
+  categories: InventoryCategory[];
+  onClose: () => void;
+  onSubmit: (payload: InventoryMenuItemInput) => void;
+  isSaving: boolean;
+}) {
+  const isEdit = Boolean(item);
+  const [title, setTitle] = useState('');
+  const [price, setPrice] = useState('');
+  const [stockLevel, setStockLevel] = useState('0');
+  const [minThreshold, setMinThreshold] = useState(String(DEFAULT_LOW_STOCK_THRESHOLD));
+  const [unit, setUnit] = useState('');
+  const [description, setDescription] = useState('');
+  const [image, setImage] = useState('');
+  const [categoryId, setCategoryId] = useState<number | null>(null);
+  const [showCategoryList, setShowCategoryList] = useState(false);
+  const [autoToggle, setAutoToggle] = useState(true);
+  const [available, setAvailable] = useState(true);
+
+  useEffect(() => {
+    if (!visible) {
+      setShowCategoryList(false);
+      return;
+    }
+
+    if (item) {
+      setTitle(item.title ?? '');
+      setPrice(item.price != null ? String(item.price) : '');
+      setStockLevel(String(item.stock_level ?? 0));
+      setMinThreshold(item.min_threshold != null ? String(item.min_threshold) : '');
+      setUnit(item.unit ?? '');
+      setDescription(item.description ?? '');
+      setImage(item.image ?? '');
+      setCategoryId(item.category?.id ?? item.category_id ?? null);
+      setAutoToggle(Boolean(item.auto_toggle));
+      setAvailable(Boolean(item.available));
+      return;
+    }
+
+    setTitle('');
+    setPrice('');
+    setStockLevel('0');
+    setMinThreshold(String(DEFAULT_LOW_STOCK_THRESHOLD));
+    setUnit('');
+    setDescription('');
+    setImage('');
+    setCategoryId(null);
+    setAutoToggle(true);
+    setAvailable(true);
+  }, [item, visible]);
+
+  const selectedCategoryLabel = useMemo(() => {
+    if (categoryId == null) {
+      return 'Uncategorized';
+    }
+
+    return categories.find((cat) => cat.id === categoryId)?.name ?? 'Uncategorized';
+  }, [categories, categoryId]);
+
+  const handleSave = () => {
+    if (!title.trim()) {
+      Alert.alert('Validation', 'Please enter an item name.');
+      return;
+    }
+
+    const parsedPrice = Number(price);
+    if (!Number.isFinite(parsedPrice) || parsedPrice <= 0) {
+      Alert.alert('Validation', 'Please enter a valid price.');
+      return;
+    }
+
+    const parsedStock = Number(stockLevel);
+    if (!Number.isFinite(parsedStock) || parsedStock < 0) {
+      Alert.alert('Validation', 'Please enter a valid stock level.');
+      return;
+    }
+
+    const parsedThreshold = minThreshold.trim()
+      ? Number(minThreshold)
+      : null;
+
+    if (parsedThreshold != null && (!Number.isFinite(parsedThreshold) || parsedThreshold < 0)) {
+      Alert.alert('Validation', 'Please enter a valid low stock threshold.');
+      return;
+    }
+
+    const payload: InventoryMenuItemInput = {
+      title: title.trim(),
+      price: parsedPrice,
+      category_id: categoryId,
+      description: description.trim() || null,
+      image: image.trim() || null,
+      stock_level: parsedStock,
+      min_threshold: parsedThreshold,
+      unit: unit.trim() || null,
+      auto_toggle: autoToggle,
+    };
+
+    if (!autoToggle) {
+      payload.available = available;
+    }
+
+    onSubmit(payload);
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}>
+      <View style={itemModalStyles.overlay}>
+        <View style={itemModalStyles.card}>
+          <View style={itemModalStyles.header}>
+            <Text style={itemModalStyles.headerTitle}>
+              {isEdit ? 'Edit Item' : 'Create Item'}
+            </Text>
+            <Pressable onPress={onClose}>
+              <MaterialCommunityIcons name="close" size={20} color="#666" />
+            </Pressable>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <View style={itemModalStyles.field}>
+              <Text style={itemModalStyles.label}>Item Name</Text>
+              <TextInput
+                style={itemModalStyles.input}
+                value={title}
+                onChangeText={setTitle}
+                placeholder="e.g., Grilled Steak"
+                placeholderTextColor="#AAA"
+              />
+            </View>
+
+            <View style={itemModalStyles.row}>
+              <View style={itemModalStyles.rowField}>
+                <Text style={itemModalStyles.label}>Price</Text>
+                <TextInput
+                  style={itemModalStyles.input}
+                  value={price}
+                  onChangeText={setPrice}
+                  keyboardType="decimal-pad"
+                  placeholder="0.00"
+                  placeholderTextColor="#AAA"
+                />
+              </View>
+              <View style={itemModalStyles.rowField}>
+                <Text style={itemModalStyles.label}>Stock Level</Text>
+                <TextInput
+                  style={itemModalStyles.input}
+                  value={stockLevel}
+                  onChangeText={setStockLevel}
+                  keyboardType="number-pad"
+                  placeholder="0"
+                  placeholderTextColor="#AAA"
+                />
+              </View>
+            </View>
+
+            <View style={itemModalStyles.row}>
+              <View style={itemModalStyles.rowField}>
+                <Text style={itemModalStyles.label}>Low Stock Threshold</Text>
+                <TextInput
+                  style={itemModalStyles.input}
+                  value={minThreshold}
+                  onChangeText={setMinThreshold}
+                  keyboardType="number-pad"
+                  placeholder="5"
+                  placeholderTextColor="#AAA"
+                />
+              </View>
+              <View style={itemModalStyles.rowField}>
+                <Text style={itemModalStyles.label}>Unit (Optional)</Text>
+                <TextInput
+                  style={itemModalStyles.input}
+                  value={unit}
+                  onChangeText={setUnit}
+                  placeholder="e.g., plate"
+                  placeholderTextColor="#AAA"
+                />
+              </View>
+            </View>
+
+            <View style={itemModalStyles.field}>
+              <Text style={itemModalStyles.label}>Category</Text>
+              <Pressable
+                onPress={() => setShowCategoryList((prev) => !prev)}
+                style={({ pressed }) => [
+                  itemModalStyles.dropdown,
+                  pressed && { opacity: 0.7 },
+                ]}>
+                <Text style={itemModalStyles.dropdownText}>
+                  {selectedCategoryLabel}
+                </Text>
+                <MaterialCommunityIcons name="chevron-down" size={16} color="#888" />
+              </Pressable>
+              {showCategoryList && (
+                <View style={itemModalStyles.dropdownList}>
+                  <Pressable
+                    onPress={() => {
+                      setCategoryId(null);
+                      setShowCategoryList(false);
+                    }}
+                    style={itemModalStyles.dropdownItem}>
+                    <Text style={itemModalStyles.dropdownItemText}>
+                      Uncategorized
+                    </Text>
+                  </Pressable>
+                  {categories.map((cat) => (
+                    <Pressable
+                      key={cat.id}
+                      onPress={() => {
+                        setCategoryId(cat.id);
+                        setShowCategoryList(false);
+                      }}
+                      style={itemModalStyles.dropdownItem}>
+                      <Text style={itemModalStyles.dropdownItemText}>{cat.name}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+            </View>
+
+            <View style={itemModalStyles.field}>
+              <Text style={itemModalStyles.label}>Image URL (Optional)</Text>
+              <TextInput
+                style={itemModalStyles.input}
+                value={image}
+                onChangeText={setImage}
+                placeholder="https://..."
+                placeholderTextColor="#AAA"
+              />
+            </View>
+
+            <View style={itemModalStyles.field}>
+              <Text style={itemModalStyles.label}>Description (Optional)</Text>
+              <TextInput
+                style={[itemModalStyles.input, itemModalStyles.textArea]}
+                value={description}
+                onChangeText={setDescription}
+                placeholder="Add details about the item"
+                placeholderTextColor="#AAA"
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+              />
+            </View>
+
+            <View style={itemModalStyles.switchRow}>
+              <Text style={itemModalStyles.label}>Auto Toggle Availability</Text>
+              <CustomToggle
+                value={autoToggle}
+                onValueChange={setAutoToggle}
+                size="small"
+              />
+            </View>
+
+            {!autoToggle && (
+              <View style={itemModalStyles.switchRow}>
+                <Text style={itemModalStyles.label}>Available</Text>
+                <CustomToggle
+                  value={available}
+                  onValueChange={setAvailable}
+                  size="small"
+                />
+              </View>
+            )}
+
+            <View style={itemModalStyles.buttonRow}>
+              <Pressable
+                style={({ pressed }) => [
+                  itemModalStyles.cancelBtn,
+                  pressed && { opacity: 0.7 },
+                ]}
+                onPress={onClose}
+                disabled={isSaving}>
+                <Text style={itemModalStyles.cancelBtnText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  itemModalStyles.saveBtn,
+                  pressed && { opacity: 0.8 },
+                  isSaving && { opacity: 0.6 },
+                ]}
+                onPress={handleSave}
+                disabled={isSaving}>
+                <Text style={itemModalStyles.saveBtnText}>
+                  {isSaving ? 'Saving...' : isEdit ? 'Save Changes' : 'Create Item'}
+                </Text>
+              </Pressable>
+            </View>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 /* ─── Inventory Item Card ─── */
 function InventoryCard({
   item,
   index,
   onToggle,
+  onEdit,
+  onDelete,
+  onRefill,
 }: {
-  item: InventoryItem;
+  item: InventoryDisplayItem;
   index: number;
-  onToggle: (id: string) => void;
+  onToggle: (item: InventoryDisplayItem, nextValue: boolean) => void;
+  onEdit: (item: InventoryDisplayItem) => void;
+  onDelete: (item: InventoryDisplayItem) => void;
+  onRefill: (item: InventoryDisplayItem) => void;
 }) {
+  const imageUri = item.image ?? '';
+
   return (
     <Animated.View
       entering={FadeInDown.delay(300 + index * 60).duration(400)}
       style={cardStyles.container}>
       {/* Top: image + info */}
       <View style={cardStyles.topRow}>
-        <Image source={{ uri: item.image }} style={cardStyles.image} />
+        {imageUri ? (
+          <Image source={{ uri: imageUri }} style={cardStyles.image} />
+        ) : (
+          <View style={cardStyles.imagePlaceholder}>
+            <MaterialCommunityIcons
+              name="image-outline"
+              size={22}
+              color="#BBB"
+            />
+          </View>
+        )}
         <View style={cardStyles.info}>
           <View style={cardStyles.nameRow}>
             <Text style={cardStyles.name} numberOfLines={1}>
-              {item.name}
+              {item.displayName}
             </Text>
-            <Text style={cardStyles.category}>{item.category}</Text>
+            <Text style={cardStyles.category}>{item.displayCategory}</Text>
           </View>
           <View style={cardStyles.stockRow}>
             <Text
               style={[
                 cardStyles.stockCount,
-                item.status === 'out_of_stock' && { color: '#DC2626' },
-                item.status === 'low_stock' && { color: '#B45309' },
+                item.displayStatus === 'out_of_stock' && { color: '#DC2626' },
+                item.displayStatus === 'low_stock' && { color: '#B45309' },
               ]}>
-              {item.stock} units
+              {item.displayStock} units
             </Text>
-            <StockBadge status={item.status} />
+            <StockBadge status={item.displayStatus} />
           </View>
         </View>
       </View>
@@ -267,18 +628,19 @@ function InventoryCard({
         <View style={cardStyles.toggleWrap}>
           <CustomToggle
             value={item.available}
-            onValueChange={() => onToggle(item.id)}
+            onValueChange={(value) => onToggle(item, value)}
             size="small"
           />
         </View>
 
         <View style={cardStyles.actions}>
-          {item.status === 'out_of_stock' && (
+          {item.displayStatus === 'out_of_stock' && (
             <Pressable
               style={({ pressed }) => [
                 cardStyles.refillBtn,
                 pressed && { opacity: 0.7 },
-              ]}>
+              ]}
+              onPress={() => onRefill(item)}>
               <Text style={cardStyles.refillText}>Refill Now</Text>
             </Pressable>
           )}
@@ -286,11 +648,24 @@ function InventoryCard({
             style={({ pressed }) => [
               cardStyles.editBtn,
               pressed && { opacity: 0.7 },
-            ]}>
+            ]}
+            onPress={() => onEdit(item)}>
             <MaterialCommunityIcons
               name="pencil-outline"
               size={18}
               color="#888"
+            />
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              cardStyles.deleteBtn,
+              pressed && { opacity: 0.7 },
+            ]}
+            onPress={() => onDelete(item)}>
+            <MaterialCommunityIcons
+              name="delete-outline"
+              size={18}
+              color="#AC1D10"
             />
           </Pressable>
         </View>
@@ -301,50 +676,246 @@ function InventoryCard({
 
 /* ─── Main Screen ─── */
 export default function InventoryScreen() {
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<Category>('All Categories');
+  const [selectedCategoryId, setSelectedCategoryId] = useState<CategoryOption['id']>('all');
   const [selectedStatus, setSelectedStatus] = useState<StatusFilter>('All');
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
-  const [items, setItems] = useState(INVENTORY_ITEMS);
+  const [showItemModal, setShowItemModal] = useState(false);
+  const [editingItem, setEditingItem] = useState<InventoryMenuItem | null>(null);
+  const [stockItem, setStockItem] = useState<InventoryMenuItem | null>(null);
 
-  // Stats
-  const totalItems = items.length;
-  const lowStockCount = items.filter((i) => i.status === 'low_stock').length;
-  const outOfStockCount = items.filter((i) => i.status === 'out_of_stock').length;
+  const itemsQuery = useQuery({
+    queryKey: inventoryQueryKeys.items,
+    queryFn: fetchInventoryItems,
+  });
 
-  // Toggle availability
-  const handleToggle = (id: string) => {
-    setItems((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, available: !item.available } : item,
-      ),
+  const categoriesQuery = useQuery({
+    queryKey: inventoryQueryKeys.categories,
+    queryFn: fetchInventoryCategories,
+  });
+
+  const categories = categoriesQuery.data ?? [];
+  const items = itemsQuery.data ?? [];
+
+  const categoryNameById = useMemo(
+    () => new Map(categories.map((category) => [category.id, category.name])),
+    [categories],
+  );
+
+  useEffect(() => {
+    if (selectedCategoryId !== 'all' && !categoryNameById.has(selectedCategoryId)) {
+      setSelectedCategoryId('all');
+    }
+  }, [categoryNameById, selectedCategoryId]);
+
+  const categoryOptions = useMemo<CategoryOption[]>(
+    () => [
+      { id: 'all', name: 'All Categories' },
+      ...categories.map((category) => ({ id: category.id, name: category.name })),
+    ],
+    [categories],
+  );
+
+  const selectedCategoryLabel =
+    selectedCategoryId === 'all'
+      ? 'All Categories'
+      : categoryNameById.get(selectedCategoryId) ?? 'All Categories';
+
+  const displayItems = useMemo(
+    () => items.map((item) => toDisplayItem(item, categoryNameById)),
+    [categoryNameById, items],
+  );
+
+  const totalItems = displayItems.length;
+  const lowStockCount = displayItems.filter(
+    (item) => item.displayStatus === 'low_stock',
+  ).length;
+  const outOfStockCount = displayItems.filter(
+    (item) => item.displayStatus === 'out_of_stock',
+  ).length;
+
+  const showError = (title: string, error: unknown) => {
+    const message = error instanceof Error
+      ? error.message
+      : 'Please try again in a moment.';
+    Alert.alert(title, message);
+  };
+
+  const toggleAvailabilityMutation = useMutation({
+    mutationFn: ({ id, available }: { id: number; available: boolean }) =>
+      updateInventoryItemAvailability(id, available),
+    onMutate: async ({ id, available }) => {
+      await queryClient.cancelQueries({ queryKey: inventoryQueryKeys.items });
+      const previousItems = queryClient.getQueryData<InventoryMenuItem[]>(
+        inventoryQueryKeys.items,
+      );
+
+      queryClient.setQueryData<InventoryMenuItem[]>(
+        inventoryQueryKeys.items,
+        (current) =>
+          current?.map((item) =>
+            item.id === id ? { ...item, available } : item,
+          ),
+      );
+
+      return { previousItems };
+    },
+    onError: (error, _vars, context) => {
+      if (context?.previousItems) {
+        queryClient.setQueryData(inventoryQueryKeys.items, context.previousItems);
+      }
+      showError('Update failed', error);
+    },
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: inventoryQueryKeys.items }),
+  });
+
+  const updateStockMutation = useMutation({
+    mutationFn: ({ id, stockLevel }: { id: number; stockLevel: number }) =>
+      updateInventoryItemStock(id, stockLevel),
+    onMutate: async ({ id, stockLevel }) => {
+      await queryClient.cancelQueries({ queryKey: inventoryQueryKeys.items });
+      const previousItems = queryClient.getQueryData<InventoryMenuItem[]>(
+        inventoryQueryKeys.items,
+      );
+
+      queryClient.setQueryData<InventoryMenuItem[]>(
+        inventoryQueryKeys.items,
+        (current) =>
+          current?.map((item) =>
+            item.id === id ? { ...item, stock_level: stockLevel } : item,
+          ),
+      );
+
+      return { previousItems };
+    },
+    onError: (error, _vars, context) => {
+      if (context?.previousItems) {
+        queryClient.setQueryData(inventoryQueryKeys.items, context.previousItems);
+      }
+      showError('Update failed', error);
+    },
+    onSuccess: () => {
+      setStockItem(null);
+    },
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: inventoryQueryKeys.items }),
+  });
+
+  const createItemMutation = useMutation({
+    mutationFn: (payload: InventoryMenuItemInput) => createInventoryItem(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: inventoryQueryKeys.items });
+      setShowItemModal(false);
+      setEditingItem(null);
+    },
+    onError: (error) => showError('Create failed', error),
+  });
+
+  const updateItemMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: InventoryMenuItemInput }) =>
+      updateInventoryItem(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: inventoryQueryKeys.items });
+      setShowItemModal(false);
+      setEditingItem(null);
+    },
+    onError: (error) => showError('Update failed', error),
+  });
+
+  const deleteItemMutation = useMutation({
+    mutationFn: (id: number) => deleteInventoryItem(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: inventoryQueryKeys.items });
+    },
+    onError: (error) => showError('Delete failed', error),
+  });
+
+  const handleToggle = (item: InventoryDisplayItem, nextValue: boolean) => {
+    toggleAvailabilityMutation.mutate({ id: item.id, available: nextValue });
+  };
+
+  const handleAddItem = () => {
+    setEditingItem(null);
+    setShowItemModal(true);
+  };
+
+  const handleEditItem = (item: InventoryDisplayItem) => {
+    setEditingItem(item);
+    setShowItemModal(true);
+  };
+
+  const handleDeleteItem = (item: InventoryDisplayItem) => {
+    Alert.alert(
+      'Delete Item',
+      `Are you sure you want to delete "${item.displayName}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => deleteItemMutation.mutate(item.id),
+        },
+      ],
     );
+  };
+
+  const handleSaveItem = (payload: InventoryMenuItemInput) => {
+    if (editingItem) {
+      updateItemMutation.mutate({ id: editingItem.id, payload });
+      return;
+    }
+
+    createItemMutation.mutate(payload);
+  };
+
+  const handleRefillItem = (item: InventoryDisplayItem) => {
+    setStockItem(item);
   };
 
   // Filtered items
   const filteredItems = useMemo(() => {
-    let result = items;
+    let result = displayItems;
 
-    if (selectedCategory !== 'All Categories') {
-      result = result.filter((i) => i.category === selectedCategory);
+    if (selectedCategoryId !== 'all') {
+      result = result.filter((item) => {
+        const categoryId = item.category?.id ?? item.category_id;
+        return categoryId === selectedCategoryId;
+      });
     }
 
     if (selectedStatus !== 'All') {
-      result = result.filter((i) => i.status === selectedStatus);
+      result = result.filter((item) => item.displayStatus === selectedStatus);
     }
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       result = result.filter(
-        (i) =>
-          i.name.toLowerCase().includes(q) ||
-          i.category.toLowerCase().includes(q),
+        (item) =>
+          item.displayName.toLowerCase().includes(q) ||
+          item.displayCategory.toLowerCase().includes(q),
       );
     }
 
     return result;
-  }, [items, selectedCategory, selectedStatus, searchQuery]);
+  }, [displayItems, selectedCategoryId, selectedStatus, searchQuery]);
+
+  const isLoading = itemsQuery.isLoading || categoriesQuery.isLoading;
+  const hasError = itemsQuery.isError || categoriesQuery.isError;
+  const errorMessage = (() => {
+    const error = itemsQuery.error ?? categoriesQuery.error;
+    if (!error) {
+      return 'Unable to load inventory data.';
+    }
+    return error instanceof Error ? error.message : 'Unable to load inventory data.';
+  })();
+
+  const showLoadingState = isLoading && displayItems.length === 0;
+
+  const formatStatusLabel = (status: StatusFilter) =>
+    status === 'All' ? 'Status: All' : status.replace(/_/g, ' ');
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -447,7 +1018,7 @@ export default function InventoryScreen() {
             {/* Category Dropdown */}
             <DropdownButton
               label="Category"
-              value={selectedCategory}
+              value={selectedCategoryLabel}
               onPress={() => {
                 setShowCategoryDropdown(!showCategoryDropdown);
                 setShowStatusDropdown(false);
@@ -457,7 +1028,7 @@ export default function InventoryScreen() {
             {/* Status Dropdown */}
             <DropdownButton
               label="Status"
-              value={selectedStatus === 'All' ? 'Status: All' : selectedStatus.replace('_', ' ')}
+              value={formatStatusLabel(selectedStatus)}
               onPress={() => {
                 setShowStatusDropdown(!showStatusDropdown);
                 setShowCategoryDropdown(false);
@@ -483,6 +1054,16 @@ export default function InventoryScreen() {
               <MaterialCommunityIcons name="download" size={14} color="#FFF" />
               <Text style={filterStyles.exportText}>Export</Text>
             </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [
+                filterStyles.addBtn,
+                pressed && { opacity: 0.7 },
+              ]}
+              onPress={handleAddItem}>
+              <MaterialCommunityIcons name="plus" size={14} color="#FFF" />
+              <Text style={filterStyles.addText}>New Item</Text>
+            </Pressable>
           </Animated.View>
 
           {/* ── Category Dropdown List ── */}
@@ -490,25 +1071,25 @@ export default function InventoryScreen() {
             <Animated.View
               entering={FadeInDown.duration(200)}
               style={dropdownStyles.list}>
-              {CATEGORIES.map((cat) => (
+              {categoryOptions.map((cat) => (
                 <Pressable
-                  key={cat}
+                  key={String(cat.id)}
                   onPress={() => {
-                    setSelectedCategory(cat);
+                    setSelectedCategoryId(cat.id);
                     setShowCategoryDropdown(false);
                   }}
                   style={[
                     dropdownStyles.item,
-                    selectedCategory === cat && dropdownStyles.itemActive,
+                    selectedCategoryId === cat.id && dropdownStyles.itemActive,
                   ]}>
                   <Text
                     style={[
                       dropdownStyles.itemText,
-                      selectedCategory === cat && dropdownStyles.itemTextActive,
+                      selectedCategoryId === cat.id && dropdownStyles.itemTextActive,
                     ]}>
-                    {cat}
+                    {cat.name}
                   </Text>
-                  {selectedCategory === cat && (
+                  {selectedCategoryId === cat.id && (
                     <MaterialCommunityIcons name="check" size={16} color="#AC1D10" />
                   )}
                 </Pressable>
@@ -548,13 +1129,38 @@ export default function InventoryScreen() {
           )}
 
           {/* ── Inventory Items ── */}
-          {filteredItems.length > 0 ? (
+          {hasError ? (
+            <View style={styles.errorState}>
+              <MaterialCommunityIcons name="alert-circle" size={40} color="#DC2626" />
+              <Text style={styles.errorTitle}>Unable to load inventory</Text>
+              <Text style={styles.errorSubtitle}>{errorMessage}</Text>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.retryBtn,
+                  pressed && { opacity: 0.7 },
+                ]}
+                onPress={() => {
+                  itemsQuery.refetch();
+                  categoriesQuery.refetch();
+                }}>
+                <Text style={styles.retryText}>Try Again</Text>
+              </Pressable>
+            </View>
+          ) : showLoadingState ? (
+            <View style={styles.loadingState}>
+              <ActivityIndicator size="large" color="#AC1D10" />
+              <Text style={styles.loadingText}>Loading inventory...</Text>
+            </View>
+          ) : filteredItems.length > 0 ? (
             filteredItems.map((item, i) => (
               <InventoryCard
                 key={item.id}
                 item={item}
                 index={i}
                 onToggle={handleToggle}
+                onEdit={handleEditItem}
+                onDelete={handleDeleteItem}
+                onRefill={handleRefillItem}
               />
             ))
           ) : (
@@ -579,6 +1185,31 @@ export default function InventoryScreen() {
           <View style={{ height: 40 }} />
         </ScrollView>
       </View>
+
+      <ItemFormModal
+        visible={showItemModal}
+        item={editingItem}
+        categories={categories}
+        onClose={() => {
+          setShowItemModal(false);
+          setEditingItem(null);
+        }}
+        onSubmit={handleSaveItem}
+        isSaving={createItemMutation.isPending || updateItemMutation.isPending}
+      />
+
+      <StockUpdateModal
+        visible={Boolean(stockItem)}
+        item={stockItem}
+        onClose={() => setStockItem(null)}
+        onSave={(stockLevel) => {
+          if (!stockItem) {
+            return;
+          }
+          updateStockMutation.mutate({ id: stockItem.id, stockLevel });
+        }}
+        isSaving={updateStockMutation.isPending}
+      />
     </SafeAreaView>
   );
 }
@@ -680,6 +1311,41 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#BBB',
   },
+  loadingState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 50,
+    gap: 10,
+  },
+  loadingText: {
+    fontSize: 13,
+    color: '#666',
+  },
+  errorState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 50,
+    gap: 8,
+  },
+  errorTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  errorSubtitle: {
+    fontSize: 13,
+    color: '#888',
+    textAlign: 'center',
+    paddingHorizontal: 20,
+  },
+  retryBtn: {
+    marginTop: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: '#AC1D10',
+  },
+  retryText: { fontSize: 12, fontWeight: '700', color: '#FFF' },
 });
 
 const statStyles = StyleSheet.create({
@@ -751,6 +1417,16 @@ const filterStyles = StyleSheet.create({
     backgroundColor: '#AC1D10',
   },
   exportText: { fontSize: 12, color: '#FFF', fontWeight: '700' },
+  addBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#1A1A1A',
+  },
+  addText: { fontSize: 12, color: '#FFF', fontWeight: '700' },
 });
 
 const dropdownStyles = StyleSheet.create({
@@ -807,6 +1483,14 @@ const cardStyles = StyleSheet.create({
     height: 52,
     borderRadius: 26,
     backgroundColor: '#F0F0F0',
+  },
+  imagePlaceholder: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#F0F0F0',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   info: { flex: 1 },
   nameRow: {
@@ -868,4 +1552,191 @@ const cardStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  deleteBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: '#FBE7E4',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
+
+const stockModalStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  card: {
+    backgroundColor: '#FFF',
+    borderRadius: 18,
+    width: '100%',
+    maxWidth: 320,
+    padding: 20,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  headerTitle: { fontSize: 16, fontWeight: '800', color: '#1A1A1A' },
+  subtitle: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 12,
+  },
+  field: { marginBottom: 18 },
+  label: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#555',
+    marginBottom: 6,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 13,
+    color: '#1A1A1A',
+    backgroundColor: '#FAFAFA',
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 10,
+    justifyContent: 'center',
+  },
+  cancelBtn: {
+    borderWidth: 1.5,
+    borderColor: '#E5E5E5',
+    borderRadius: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    backgroundColor: '#FFF',
+  },
+  cancelBtnText: { fontSize: 13, fontWeight: '700', color: '#666' },
+  saveBtn: {
+    backgroundColor: '#AC1D10',
+    borderRadius: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  saveBtnText: { fontSize: 13, fontWeight: '700', color: '#FFF' },
+});
+
+const itemModalStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  card: {
+    backgroundColor: '#FFF',
+    borderRadius: 18,
+    width: '100%',
+    maxWidth: 360,
+    padding: 20,
+    maxHeight: '90%',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+  headerTitle: { fontSize: 16, fontWeight: '800', color: '#1A1A1A' },
+  field: { marginBottom: 16 },
+  label: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#555',
+    marginBottom: 6,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 13,
+    color: '#1A1A1A',
+    backgroundColor: '#FAFAFA',
+  },
+  textArea: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  row: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 16,
+  },
+  rowField: { flex: 1 },
+  dropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: '#FAFAFA',
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+  },
+  dropdownText: { fontSize: 13, color: '#555', fontWeight: '600' },
+  dropdownList: {
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+    borderRadius: 10,
+    backgroundColor: '#FFF',
+    marginTop: 8,
+    overflow: 'hidden',
+  },
+  dropdownItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F5F5F5',
+  },
+  dropdownItemText: { fontSize: 13, color: '#555', fontWeight: '500' },
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 10,
+    justifyContent: 'center',
+    marginTop: 4,
+    marginBottom: 6,
+  },
+  cancelBtn: {
+    borderWidth: 1.5,
+    borderColor: '#E5E5E5',
+    borderRadius: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    alignItems: 'center',
+    backgroundColor: '#FFF',
+  },
+  cancelBtnText: { fontSize: 13, fontWeight: '700', color: '#666' },
+  saveBtn: {
+    backgroundColor: '#AC1D10',
+    borderRadius: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    alignItems: 'center',
+  },
+  saveBtnText: { fontSize: 13, fontWeight: '700', color: '#FFF' },
 });
