@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 
 import { apiClient } from '@/src/api/apiClient';
+import { applyLocalOrderStatuses } from '@/src/features/orders/local-order-status';
 
 interface OrderItem {
   id: number;
@@ -41,10 +42,19 @@ export default function OrderHistoryScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('Ongoing');
 
+  const handleBackPress = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace('/(tabs)/profile');
+  };
+
   const fetchOrders = async () => {
     try {
       const response = await apiClient<Order[]>('/orders');
-      setOrders(response || []);
+      setOrders(applyLocalOrderStatuses(response || []));
     } catch (error) {
       console.error('Failed to fetch orders:', error);
     }
@@ -122,9 +132,13 @@ export default function OrderHistoryScreen() {
       : null;
 
     const extraCount = item.items.length > 1 ? item.items.length - 1 : 0;
+    const openOrderDetails = () =>
+      router.push({ pathname: '/order-tracking/[id]', params: { id: item.id } });
 
     return (
-      <View style={styles.orderCard}>
+      <Pressable
+        style={({ pressed }) => [styles.orderCard, pressed && styles.pressed]}
+        onPress={openOrderDetails}>
         {/* Top Meta Row */}
         <View style={styles.cardHeader}>
           <View>
@@ -191,8 +205,10 @@ export default function OrderHistoryScreen() {
             {item.status !== 'Delivered' && (
               <Pressable 
                 style={styles.actionBtnGray}
-                onPress={() => router.push({ pathname: '/order-tracking/[id]', params: { id: item.id } })}>
-                <Text style={styles.actionBtnTextGray}>Track Order</Text>
+                onPress={openOrderDetails}>
+                <Text style={styles.actionBtnTextGray}>
+                  {item.status === 'Cancelled' ? 'View Details' : 'Track Order'}
+                </Text>
               </Pressable>
             )}
             <Pressable style={styles.actionBtnPrimary}>
@@ -200,7 +216,7 @@ export default function OrderHistoryScreen() {
             </Pressable>
           </View>
         </View>
-      </View>
+      </Pressable>
     );
   };
 
@@ -210,7 +226,7 @@ export default function OrderHistoryScreen() {
       <View style={styles.header}>
         <Pressable
           style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
-          onPress={() => router.back()}>
+          onPress={handleBackPress}>
           <MaterialCommunityIcons name="chevron-left" size={26} color="#1A1A1A" />
         </Pressable>
         <View style={styles.headerSpacer} />
