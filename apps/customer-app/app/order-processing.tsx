@@ -27,7 +27,7 @@ interface StageState {
 const STAGE_STATES: Record<ProcessingStage, StageState> = {
   'contacting-kitchen': {
     progress: 0.55,
-    title: 'Placing your order...',
+    title: 'Processing Order',
     subtitle: "We're curating the finest ingredients and notifying the chef at Patty Shack.",
     kitchenTitle: 'Contacting Kitchen',
     kitchenTag: 'WORKING',

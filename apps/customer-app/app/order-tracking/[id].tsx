@@ -13,8 +13,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { useCart } from '@/components/cart';
 import { CheckoutSelectionItem } from '@/components/checkout';
+import { apiClient } from '@/src/api/apiClient';
+import { geocodeAddress, buildRouteStaticMapUrl } from '@/src/api/geocode';
 
 const TIMELINE_LABELS = [
   'Order Placed',
@@ -37,38 +38,56 @@ function formatTime(dateValue: Date) {
 
 export default function OrderTrackingScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
-  const { activeOrder } = useCart();
 
-  const [statusIndex, setStatusIndex] = useState(2);
+  const [order, setOrder] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [isItemsSheetOpen, setIsItemsSheetOpen] = useState(false);
+  const [deliveryCoords, setDeliveryCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [restaurantCoords, setRestaurantCoords] = useState<{ latitude: number; longitude: number } | null>(null);
 
-  const timeoutRefOne = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const timeoutRefTwo = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const order =
-    activeOrder && params.id && activeOrder.id === params.id
-      ? activeOrder
-      : null;
+  const fetchOrder = async () => {
+    try {
+      const response = await apiClient<any[]>('/orders');
+      if (response && response.length > 0) {
+        const foundOrder = response.find(o => String(o.id) === params.id);
+        if (foundOrder) {
+          setOrder(foundOrder);
+          
+          if (!deliveryCoords && foundOrder.delivery_address) {
+            geocodeAddress(foundOrder.delivery_address).then(coords => {
+              if (coords) {
+                setDeliveryCoords(coords);
+                setRestaurantCoords({
+                  latitude: coords.latitude + 0.015,
+                  longitude: coords.longitude - 0.015,
+                });
+              }
+            });
+          }
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    timeoutRefOne.current = setTimeout(() => {
-      setStatusIndex(3);
-    }, 5200);
+    fetchOrder();
+    const interval = setInterval(fetchOrder, 5000);
+    return () => clearInterval(interval);
+  }, [params.id]);
 
-    timeoutRefTwo.current = setTimeout(() => {
-      setStatusIndex(4);
-    }, 12000);
-
-    return () => {
-      if (timeoutRefOne.current) {
-        clearTimeout(timeoutRefOne.current);
-      }
-
-      if (timeoutRefTwo.current) {
-        clearTimeout(timeoutRefTwo.current);
-      }
-    };
-  }, []);
+  if (isLoading && !order) {
+    return (
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ marginTop: 12, color: '#888' }}>Loading tracking details...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (!order) {
     return (
@@ -96,14 +115,21 @@ export default function OrderTrackingScreen() {
     );
   }
 
-  const placedAtDate = new Date(order.placedAt);
+  let statusIndex = 0;
+  if (order.status === 'Order Confirmed') statusIndex = 1;
+  else if (order.status === 'Preparing') statusIndex = 2; // In case we add it
+  else if (order.status === 'Out for Delivery') statusIndex = 3;
+  else if (order.status === 'Delivered') statusIndex = 4;
+  else if (order.status === 'Cancelled') statusIndex = -1;
+
+  const placedAtDate = new Date(order.created_at);
   const stepTimes = [0, 5, 15, 25, 40].map(
     (offsetMinutes) => new Date(placedAtDate.getTime() + offsetMinutes * 60000)
   );
 
   const etaText =
     statusIndex >= 4 ? 'Arrived' : statusIndex >= 3 ? '10-18 mins' : '25-35 mins';
-  const deliveryProgress = Math.min(1, (statusIndex + 1) / TIMELINE_LABELS.length);
+  const deliveryProgress = statusIndex === -1 ? 0 : Math.min(1, (statusIndex + 1) / TIMELINE_LABELS.length);
 
   const timelineRows = TIMELINE_LABELS.map((label, index) => {
     const state =
@@ -124,27 +150,33 @@ export default function OrderTrackingScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}>
           <View style={styles.mapHero}>
-            <Image
-              source={{
-                uri: 'https://api.mapbox.com/styles/v1/mapbox/light-v11/static/121.0437,14.6349,13,0/700x420@2x?access_token=pk.placeholder',
-              }}
-              style={styles.mapImage}
-              defaultSource={{
-                uri: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==',
-              }}
-            />
+            {restaurantCoords && deliveryCoords ? (
+              <Image
+                source={{
+                  uri: buildRouteStaticMapUrl(
+                    restaurantCoords.latitude,
+                    restaurantCoords.longitude,
+                    deliveryCoords.latitude,
+                    deliveryCoords.longitude,
+                    700,
+                    420
+                  ),
+                }}
+                style={styles.mapImage}
+              />
+            ) : (
+              <Image
+                source={{
+                  uri: 'https://api.mapbox.com/styles/v1/mapbox/light-v11/static/121.0437,14.6349,13,0/700x420@2x?access_token=pk.placeholder',
+                }}
+                style={styles.mapImage}
+                defaultSource={{
+                  uri: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==',
+                }}
+              />
+            )}
+
             <View style={styles.mapOverlay} />
-
-            <View style={[styles.routeSegment, styles.routeSegmentOne]} />
-            <View style={[styles.routeSegment, styles.routeSegmentTwo]} />
-            <View style={[styles.routeSegment, styles.routeSegmentThree]} />
-
-            <View style={styles.startMarker}>
-              <MaterialCommunityIcons name="storefront-outline" size={12} color="#FFFFFF" />
-            </View>
-            <View style={styles.endMarker}>
-              <MaterialCommunityIcons name="motorbike" size={12} color="#FFFFFF" />
-            </View>
 
             <View style={styles.arrivalCard}>
               <Text style={styles.arrivalOverline}>ARRIVING IN</Text>
@@ -166,12 +198,12 @@ export default function OrderTrackingScreen() {
           </View>
 
           <View style={styles.successWrap}>
-            <View style={styles.successIconWrap}>
-              <MaterialCommunityIcons name="check" size={16} color="#FFFFFF" />
+            <View style={[styles.successIconWrap, order.status === 'Cancelled' && { backgroundColor: '#AC1D10' }]}>
+              <MaterialCommunityIcons name={order.status === 'Cancelled' ? 'close' : 'check'} size={16} color="#FFFFFF" />
             </View>
-            <Text style={styles.successTitle}>{`Order ${order.shortId} is on its way!`}</Text>
+            <Text style={styles.successTitle}>{order.status === 'Cancelled' ? `Order #${order.id} was Cancelled` : `Order #${order.id} is on its way!`}</Text>
             <Text style={styles.successSubtitle}>
-              Get ready for a curated culinary experience delivered to your doorstep.
+              {order.status === 'Cancelled' ? 'We are sorry this order was cancelled.' : 'Get ready for a curated culinary experience delivered to your doorstep.'}
             </Text>
           </View>
 
@@ -182,7 +214,7 @@ export default function OrderTrackingScreen() {
                   <MaterialCommunityIcons name="food" size={15} color="#AC1D10" />
                 </View>
                 <View>
-                  <Text style={styles.orderCardTitle}>{`Order ${order.shortId}`}</Text>
+                  <Text style={styles.orderCardTitle}>{`Order #${order.id}`}</Text>
                   <Text style={styles.orderCardSub}>{`${order.items.length} item${order.items.length === 1 ? '' : 's'} from your cart`}</Text>
                 </View>
               </View>
@@ -201,7 +233,7 @@ export default function OrderTrackingScreen() {
               </View>
               <View style={styles.infoCopyWrap}>
                 <Text style={styles.infoTitle}>Delivery Address</Text>
-                <Text style={styles.infoSub}>{order.address.fullAddress}</Text>
+                <Text style={styles.infoSub}>{order.delivery_address || 'Home'}</Text>
               </View>
             </View>
           </View>
@@ -239,16 +271,29 @@ export default function OrderTrackingScreen() {
             {timelineRows.map((step, index) => {
               const isCompleted = step.state === 'completed';
               const isActive = step.state === 'active';
-              const iconName = isCompleted
-                ? 'check-circle'
-                : isActive
-                  ? 'motorbike'
-                  : 'clock-outline';
-              const iconColor = isCompleted
-                ? '#1B9D4C'
-                : isActive
-                  ? '#AC1D10'
-                  : '#8E8E8E';
+              
+              let iconName: any = 'clock-outline';
+              let iconColor = '#8E8E8E';
+
+              if (isCompleted) {
+                iconName = 'check-circle';
+                iconColor = '#1B9D4C';
+              } else if (isActive) {
+                if (step.label === 'Delivered') {
+                  iconName = 'check-circle';
+                  iconColor = '#1B9D4C';
+                } else if (step.label === 'Picked Up') {
+                  iconName = 'motorbike';
+                  iconColor = '#AC1D10';
+                } else {
+                  iconName = 'check-circle';
+                  iconColor = '#1B9D4C';
+                }
+              } else {
+                if (step.label === 'Delivered') {
+                  iconName = 'home';
+                }
+              }
 
               return (
                 <View
@@ -287,11 +332,11 @@ export default function OrderTrackingScreen() {
             <Text style={styles.paymentTitle}>Payment Summary</Text>
             <View style={styles.paymentRow}>
               <Text style={styles.paymentLabel}>Paid via</Text>
-              <Text style={styles.paymentValue}>{`${order.paymentMethod.label} ${order.paymentMethod.subtitle}`}</Text>
+              <Text style={styles.paymentValue}>{String(order.payment_method).toUpperCase()}</Text>
             </View>
             <View style={styles.paymentRow}>
               <Text style={styles.paymentLabel}>Order Total</Text>
-              <Text style={styles.paymentValue}>{formatPrice(order.total)}</Text>
+              <Text style={styles.paymentValue}>{formatPrice(Number(order.total))}</Text>
             </View>
           </View>
 
@@ -316,7 +361,7 @@ export default function OrderTrackingScreen() {
           <View style={styles.sheetContent}>
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>{`Items in ${order.shortId}`}</Text>
+              <Text style={styles.sheetTitle}>{`Items in #${order.id}`}</Text>
               <Pressable
                 style={({ pressed }) => [styles.sheetCloseButton, pressed && styles.pressed]}
                 onPress={() => setIsItemsSheetOpen(false)}>
@@ -327,27 +372,40 @@ export default function OrderTrackingScreen() {
             <ScrollView
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.sheetList}>
-              {order.items.map((item) => (
-                <CheckoutSelectionItem key={item.id} item={item} />
-              ))}
+              {order.items.map((item: any) => {
+                const imageUrl = item.image && !item.image.startsWith('http') 
+                  ? `https://foodhub.tmc-innovations.com${item.image}` 
+                  : item.image;
+                  
+                return (
+                  <CheckoutSelectionItem 
+                    key={item.id} 
+                    item={{
+                      ...item, 
+                      name: item.item_name,
+                      image: imageUrl
+                    }} 
+                  />
+                );
+              })}
 
               <View style={styles.sheetTotalsWrap}>
                 <View style={styles.sheetTotalRow}>
                   <Text style={styles.sheetTotalLabel}>Subtotal</Text>
-                  <Text style={styles.sheetTotalValue}>{formatPrice(order.subtotal)}</Text>
+                  <Text style={styles.sheetTotalValue}>{formatPrice(Number(order.subtotal))}</Text>
                 </View>
                 <View style={styles.sheetTotalRow}>
                   <Text style={styles.sheetTotalLabel}>Delivery Fee</Text>
-                  <Text style={styles.sheetTotalValue}>{formatPrice(order.deliveryFee)}</Text>
+                  <Text style={styles.sheetTotalValue}>{formatPrice(Number(order.delivery_fee))}</Text>
                 </View>
                 <View style={styles.sheetTotalRow}>
                   <Text style={styles.sheetTotalLabel}>Discount</Text>
-                  <Text style={styles.sheetTotalValue}>-{formatPrice(order.discount)}</Text>
+                  <Text style={styles.sheetTotalValue}>-{formatPrice(Number(order.discount))}</Text>
                 </View>
                 <View style={styles.sheetDivider} />
                 <View style={styles.sheetTotalRow}>
                   <Text style={styles.sheetTotalLabelStrong}>Total</Text>
-                  <Text style={styles.sheetTotalValueStrong}>{formatPrice(order.total)}</Text>
+                  <Text style={styles.sheetTotalValueStrong}>{formatPrice(Number(order.total))}</Text>
                 </View>
               </View>
             </ScrollView>
@@ -383,63 +441,13 @@ const styles = StyleSheet.create({
   mapOverlay: {
     ...StyleSheet.absoluteFillObject,
     height: 220,
-    backgroundColor: 'rgba(240, 240, 240, 0.35)',
-  },
-  routeSegment: {
-    position: 'absolute',
-    height: 4,
-    borderRadius: 999,
-    backgroundColor: '#AC1D10',
-  },
-  routeSegmentOne: {
-    width: 82,
-    left: 66,
-    top: 94,
-    transform: [{ rotate: '-16deg' }],
-  },
-  routeSegmentTwo: {
-    width: 74,
-    left: 138,
-    top: 111,
-    transform: [{ rotate: '8deg' }],
-  },
-  routeSegmentThree: {
-    width: 58,
-    left: 201,
-    top: 99,
-    transform: [{ rotate: '-24deg' }],
-  },
-  startMarker: {
-    position: 'absolute',
-    left: 48,
-    top: 102,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#AC1D10',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
-  endMarker: {
-    position: 'absolute',
-    right: 46,
-    top: 72,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#AC1D10',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   arrivalCard: {
     position: 'absolute',
     left: 16,
     right: 16,
-    bottom: 0,
+    bottom: -32,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: '#DFDFDF',

@@ -10,6 +10,8 @@ import {
   Text,
   TextInput,
   View,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -49,20 +51,29 @@ export default function CheckoutScreen() {
     selectPaymentForOrder,
   } = usePayment();
 
+  const [isPlacingOrder, setIsPlacingOrder] = React.useState(false);
+
   const handleSelectPayment = (methodId: CheckoutPaymentId) => {
     selectPaymentForOrder(methodId);
   };
 
-  const handlePlaceOrder = () => {
-    if (!cartItems.length) {
+  const handlePlaceOrder = async () => {
+    if (!cartItems.length || isPlacingOrder) {
       return;
     }
 
-    const order = placeOrderFromCart(selectedPayment);
-    router.push({
-      pathname: '/order-processing',
-      params: { orderId: order.id },
-    });
+    try {
+      setIsPlacingOrder(true);
+      const order = await placeOrderFromCart(selectedPayment);
+      router.push({
+        pathname: '/order-processing',
+        params: { orderId: order.id },
+      });
+    } catch (error) {
+      Alert.alert('Checkout Failed', 'There was an issue placing your order. Please try again.');
+    } finally {
+      setIsPlacingOrder(false);
+    }
   };
 
   return (
@@ -242,17 +253,23 @@ export default function CheckoutScreen() {
           <Pressable
             style={({ pressed }) => [
               styles.placeOrderBtn,
-              !cartItems.length && styles.placeOrderBtnDisabled,
-              pressed && cartItems.length > 0 && styles.placeOrderPressed,
+              (!cartItems.length || isPlacingOrder) && styles.placeOrderBtnDisabled,
+              pressed && cartItems.length > 0 && !isPlacingOrder && styles.placeOrderPressed,
             ]}
-            disabled={!cartItems.length}
+            disabled={!cartItems.length || isPlacingOrder}
             onPress={handlePlaceOrder}>
-            <Text style={styles.placeOrderText}>Place Order</Text>
-            <MaterialCommunityIcons
-              name="chevron-right"
-              size={20}
-              color="#FFFFFF"
-            />
+            {isPlacingOrder ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <>
+                <Text style={styles.placeOrderText}>Place Order</Text>
+                <MaterialCommunityIcons
+                  name="chevron-right"
+                  size={20}
+                  color="#FFFFFF"
+                />
+              </>
+            )}
           </Pressable>
 
           {/* ── Legal ── */}

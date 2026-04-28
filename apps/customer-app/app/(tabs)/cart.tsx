@@ -1,5 +1,5 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import React from 'react';
 import {
   Pressable,
@@ -8,6 +8,7 @@ import {
   Text,
   View,
   RefreshControl,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -53,6 +54,28 @@ export default function CartScreen() {
     setRefreshing(false);
   }, [fetchCart]);
 
+  const fadeAnim = React.useRef(new Animated.Value(0)).current;
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (fetchCart) {
+        fetchCart();
+      }
+
+      // Animate entry
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+
+      return () => {
+        // Reset animation on blur
+        fadeAnim.setValue(0);
+      };
+    }, [fetchCart, fadeAnim])
+  );
+
   const handleIncreaseQuantity = (id: string) => {
     increaseQuantity(id);
   };
@@ -78,7 +101,15 @@ export default function CartScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <View style={styles.container}>
+      <Animated.View style={[styles.container, {
+        opacity: fadeAnim,
+        transform: [{
+          translateY: fadeAnim.interpolate({
+            inputRange: [0, 1],
+            outputRange: [40, 0],
+          })
+        }]
+      }]}>
         {/* ── Header ── */}
         <View style={styles.header}>
           <Pressable
@@ -192,7 +223,7 @@ export default function CartScreen() {
             />
           </View>
         )}
-      </View>
+      </Animated.View>
     </SafeAreaView>
   );
 }
