@@ -1,59 +1,191 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  Image,
-  FlatList,
-  TextInput,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-} from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useQueryClient } from '@tanstack/react-query';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useMemo, useState } from 'react';
+import {
+  Alert,
+  FlatList,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useRestaurantReviews } from '@/src/features/browse/api/useRestaurantReviews';
+import { getReviewedOrder, saveReviewedOrder, submitReviewForOrder } from '@/src/features/reviews/review-flow';
 
 export default function RatingsAndFeedbacks() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, orderId, storeName } = useLocalSearchParams<{
+    id: string;
+    orderId?: string;
+    storeName?: string;
+  }>();
   const router = useRouter();
-
+  const queryClient = useQueryClient();
   const { data: reviewsData, isLoading } = useRestaurantReviews(id);
 
   const [reviewText, setReviewText] = useState('');
+  const [rating, setRating] = useState(5);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const existingReviewedOrder = useMemo(() => getReviewedOrder(orderId), [orderId]);
+  const hasReviewContext = !!orderId;
+  const hasSubmittedReview = !!existingReviewedOrder;
+  const displayedRating = hasSubmittedReview ? existingReviewedOrder.rating : rating;
+  const displayedReviewText = hasSubmittedReview ? existingReviewedOrder.review : reviewText;
+
+  const handleOpenRestaurant = () => {
+    router.push({ pathname: '/restaurant/[id]', params: { id } });
+  };
+
+  const handleSubmitReview = async () => {
+    if (!orderId) {
+      return;
+    }
+
+    const trimmedReview = reviewText.trim();
+
+    if (!trimmedReview) {
+      Alert.alert('Add your feedback', 'Please write a short review before submitting.');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      await submitReviewForOrder({
+        orderId: String(orderId),
+        restaurantId: String(id),
+        rating,
+        review: trimmedReview,
+      });
+
+      saveReviewedOrder({
+        orderId: String(orderId),
+        restaurantId: String(id),
+        storeName: String(storeName ?? ''),
+        rating,
+        review: trimmedReview,
+        reviewedAt: new Date().toISOString(),
+      });
+
+      await queryClient.invalidateQueries({ queryKey: ['restaurant-reviews', id] });
+      setReviewText('');
+      Alert.alert('Review sent', 'Thanks for sharing your feedback.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to submit your review right now.';
+      Alert.alert('Review not sent', message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const renderHeader = () => {
-    if (!reviewsData) return null;
+    if (!reviewsData) {
+      return null;
+    }
+
     const { summary } = reviewsData;
+
     return (
       <View style={styles.headerContainer}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
           <MaterialCommunityIcons name="chevron-left" size={28} color="#1A1A1A" />
         </Pressable>
+
         <Text style={styles.screenTitle}>Ratings & Feedbacks</Text>
         <Text style={styles.subtitleText}>
           <Text style={styles.subtitleTag}>Review Summary</Text> • {summary.total_reviews.toLocaleString()} verified reviews
         </Text>
 
-        {/* Summary Card */}
+        {hasReviewContext ? (
+          <View style={styles.reviewComposerCard}>
+            <View style={styles.reviewComposerHeader}>
+              <View style={styles.reviewComposerCopy}>
+                <Text style={styles.reviewComposerTitle}>
+                  {hasSubmittedReview ? 'Your review is in' : 'Leave a review'}
+                </Text>
+                <Text style={styles.reviewComposerSubtitle}>
+                  {hasSubmittedReview
+                    ? 'You can now revisit the restaurant or check your feedback any time.'
+                    : `Tell us how ${storeName || 'this restaurant'} did on your order.`}
+                </Text>
+              </View>
+
+              <Pressable style={styles.viewRestaurantPill} onPress={handleOpenRestaurant}>
+                <Text style={styles.viewRestaurantPillText}>View Restaurant</Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.starPickerRow}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <Pressable
+                  key={star}
+                  style={styles.starPickerButton}
+                  disabled={hasSubmittedReview}
+                  onPress={() => setRating(star)}>
+                  <MaterialCommunityIcons
+                    name={star <= displayedRating ? 'star' : 'star-outline'}
+                    size={26}
+                    color="#F9A825"
+                  />
+                </Pressable>
+              ))}
+            </View>
+
+            <TextInput
+              style={[styles.reviewComposerInput, hasSubmittedReview && styles.reviewComposerInputDisabled]}
+              placeholder="Share what you liked, what could improve, and what others should try."
+              placeholderTextColor="#999"
+              multiline
+              editable={!hasSubmittedReview}
+              value={displayedReviewText}
+              onChangeText={setReviewText}
+            />
+
+            {!hasSubmittedReview ? (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.submitReviewButton,
+                  (pressed || isSubmitting) && styles.pressed,
+                ]}
+                disabled={isSubmitting}
+                onPress={handleSubmitReview}>
+                <Text style={styles.submitReviewButtonText}>
+                  {isSubmitting ? 'Submitting...' : 'Submit Review'}
+                </Text>
+              </Pressable>
+            ) : (
+              <View style={styles.reviewSubmittedBanner}>
+                <MaterialCommunityIcons name="check-decagram" size={16} color="#1B9D4C" />
+                <Text style={styles.reviewSubmittedText}>
+                  Thanks, your review for this order has been saved.
+                </Text>
+              </View>
+            )}
+          </View>
+        ) : null}
+
         <View style={styles.summaryCard}>
           <View style={styles.summaryLeft}>
             <Text style={styles.averageScore}>{summary.average_rating.toFixed(1)}</Text>
             <View style={styles.starsRow}>
-              {[1, 2, 3, 4, 5].map((star, i) => (
-                <MaterialCommunityIcons 
-                  key={i} 
-                  name={i + 1 <= Math.round(summary.average_rating) ? "star" : "star-outline"} 
-                  size={16} 
-                  color="#F9A825" 
+              {[1, 2, 3, 4, 5].map((star) => (
+                <MaterialCommunityIcons
+                  key={star}
+                  name={star <= Math.round(summary.average_rating) ? 'star' : 'star-outline'}
+                  size={16}
+                  color="#F9A825"
                 />
               ))}
             </View>
-            <Text style={styles.baseReviewsText}>Based on {summary.total_reviews.toLocaleString()} reviews</Text>
+            <Text style={styles.baseReviewsText}>
+              Based on {summary.total_reviews.toLocaleString()} reviews
+            </Text>
           </View>
 
           <View style={styles.summaryRight}>
@@ -69,63 +201,66 @@ export default function RatingsAndFeedbacks() {
           </View>
         </View>
 
-      {/* Filter Chips */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
-        <Pressable style={[styles.chip, styles.chipActive]}>
-          <Text style={styles.chipTextActive}>Most Recent</Text>
-        </Pressable>
-        <Pressable style={styles.chip}>
-          <Text style={styles.chipText}>Highest Rating</Text>
-        </Pressable>
-        <Pressable style={styles.chip}>
-          <MaterialCommunityIcons name="image-outline" size={16} color="#666" style={{ marginRight: 6 }} />
-          <Text style={styles.chipText}>With Photos</Text>
-        </Pressable>
-        <Pressable style={styles.chip}>
-          <MaterialCommunityIcons name="check-decagram-outline" size={16} color="#666" style={{ marginRight: 6 }} />
-          <Text style={styles.chipText}>Verified</Text>
-        </Pressable>
-      </ScrollView>
-    </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
+          <Pressable style={[styles.chip, styles.chipActive]}>
+            <Text style={styles.chipTextActive}>Most Recent</Text>
+          </Pressable>
+          <Pressable style={styles.chip}>
+            <Text style={styles.chipText}>Highest Rating</Text>
+          </Pressable>
+          <Pressable style={styles.chip}>
+            <MaterialCommunityIcons name="image-outline" size={16} color="#666" style={styles.chipIcon} />
+            <Text style={styles.chipText}>With Photos</Text>
+          </Pressable>
+          <Pressable style={styles.chip}>
+            <MaterialCommunityIcons name="check-decagram-outline" size={16} color="#666" style={styles.chipIcon} />
+            <Text style={styles.chipText}>Verified</Text>
+          </Pressable>
+        </ScrollView>
+      </View>
     );
   };
 
   const renderReviewItem = ({ item }: { item: any }) => (
     <View style={styles.reviewCard}>
       <View style={styles.reviewHeader}>
-        <View style={[styles.avatar, { alignItems: 'center', justifyContent: 'center', backgroundColor: '#F0F0F0' }]}>
-          <Text style={{ fontWeight: '700', color: '#666' }}>{item.customer_initials}</Text>
+        <View style={styles.avatar}>
+          <Text style={styles.avatarText}>{item.customer_initials}</Text>
         </View>
         <View style={styles.reviewMeta}>
           <Text style={styles.reviewName}>{item.customer_name}</Text>
           <Text style={styles.reviewTime}>{item.created_at_human}</Text>
         </View>
         <View style={styles.reviewStars}>
-          {[...Array(item.rating)].map((_, i) => (
-            <MaterialCommunityIcons key={i} name="star" size={14} color="#F9A825" />
+          {Array.from({ length: item.rating }).map((_, index) => (
+            <MaterialCommunityIcons key={index} name="star" size={14} color="#F9A825" />
           ))}
         </View>
       </View>
 
       <Text style={styles.reviewText}>{item.review}</Text>
 
-      {item.photos && item.photos.length > 0 && (
+      {item.photos && item.photos.length > 0 ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.reviewPhotos}>
           {item.photos.map((photo: string, index: number) => (
-            <Image key={index} source={{ uri: `https://foodhub.tmc-innovations.com${photo}` }} style={styles.reviewPhoto} />
+            <Image
+              key={index}
+              source={{ uri: `https://foodhub.tmc-innovations.com${photo}` }}
+              style={styles.reviewPhoto}
+            />
           ))}
         </ScrollView>
-      )}
+      ) : null}
 
-      {item.owner_reply && (
-        <View style={{ backgroundColor: '#F7F7F7', padding: 12, borderRadius: 8, marginTop: -4, marginBottom: 12 }}>
-          <Text style={{ fontSize: 13, fontWeight: '700', color: '#1A1A1A', marginBottom: 4 }}>Restaurant Response</Text>
-          <Text style={{ fontSize: 13, color: '#444' }}>{item.owner_reply}</Text>
+      {item.owner_reply ? (
+        <View style={styles.ownerReplyCard}>
+          <Text style={styles.ownerReplyTitle}>Restaurant Response</Text>
+          <Text style={styles.ownerReplyText}>{item.owner_reply}</Text>
         </View>
-      )}
+      ) : null}
 
       <View style={styles.reviewFooterDivider} />
-      
+
       <Pressable style={styles.helpfulBtn}>
         <MaterialCommunityIcons name="thumb-up-outline" size={16} color="#666" />
         <Text style={styles.helpfulText}>Helpful ({item.helpful_count})</Text>
@@ -136,11 +271,13 @@ export default function RatingsAndFeedbacks() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar style="dark" />
-      
+
       {isLoading ? (
         <>
           {renderHeader()}
-          <View style={{ flex: 1, alignItems: 'center', paddingTop: 20 }}><Text>Loading reviews...</Text></View>
+          <View style={styles.loadingWrap}>
+            <Text>Loading reviews...</Text>
+          </View>
         </>
       ) : (
         <FlatList
@@ -152,22 +289,6 @@ export default function RatingsAndFeedbacks() {
           showsVerticalScrollIndicator={false}
         />
       )}
-
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
-      >
-        <View style={styles.inputContainer}>
-          <Image source={{ uri: 'https://randomuser.me/api/portraits/men/32.jpg' }} style={styles.inputAvatar} />
-          <TextInput
-            style={styles.textInput}
-            placeholder="Write a review..."
-            placeholderTextColor="#999"
-            value={reviewText}
-            onChangeText={setReviewText}
-          />
-        </View>
-      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -199,6 +320,109 @@ const styles = StyleSheet.create({
   subtitleTag: {
     fontWeight: '700',
     color: '#AC1D10',
+  },
+  reviewComposerCard: {
+    backgroundColor: '#FFF8F2',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#F4E1CC',
+    padding: 16,
+    marginBottom: 20,
+  },
+  reviewComposerHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  reviewComposerCopy: {
+    flex: 1,
+  },
+  reviewComposerTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#1A1A1A',
+  },
+  reviewComposerSubtitle: {
+    marginTop: 4,
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#76573B',
+  },
+  viewRestaurantPill: {
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#ECD6BE',
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewRestaurantPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#7A4B20',
+  },
+  starPickerRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 16,
+    marginBottom: 14,
+  },
+  starPickerButton: {
+    width: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reviewComposerInput: {
+    minHeight: 112,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#F0DCC8',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    textAlignVertical: 'top',
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#1A1A1A',
+  },
+  reviewComposerInputDisabled: {
+    color: '#555',
+    backgroundColor: '#FFFDFB',
+  },
+  submitReviewButton: {
+    marginTop: 14,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: '#AC1D10',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  submitReviewButtonText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  reviewSubmittedBanner: {
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F1FBF4',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#CDEDD7',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  reviewSubmittedText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 17,
+    color: '#24623B',
+    fontWeight: '600',
   },
   summaryCard: {
     flexDirection: 'row',
@@ -295,8 +519,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#AC1D10',
   },
+  chipIcon: {
+    marginRight: 6,
+  },
   listContent: {
-    paddingBottom: 100, // Make room for floating input
+    paddingBottom: 36,
     paddingHorizontal: 16,
   },
   reviewCard: {
@@ -316,7 +543,13 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     marginRight: 12,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#F0F0F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    fontWeight: '700',
+    color: '#666',
   },
   reviewMeta: {
     flex: 1,
@@ -352,6 +585,23 @@ const styles = StyleSheet.create({
     marginRight: 12,
     backgroundColor: '#F5F5F5',
   },
+  ownerReplyCard: {
+    backgroundColor: '#F7F7F7',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: -4,
+    marginBottom: 12,
+  },
+  ownerReplyTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1A1A1A',
+    marginBottom: 4,
+  },
+  ownerReplyText: {
+    fontSize: 13,
+    color: '#444',
+  },
   reviewFooterDivider: {
     height: 1,
     backgroundColor: '#EFEFEF',
@@ -367,37 +617,12 @@ const styles = StyleSheet.create({
     color: '#666',
     fontWeight: '500',
   },
-  keyboardView: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#EFEFEF',
-    paddingBottom: Platform.OS === 'ios' ? 24 : 0,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    gap: 12,
-  },
-  inputAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#F5F5F5',
-  },
-  textInput: {
+  loadingWrap: {
     flex: 1,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: '#EFEFEF',
-    paddingHorizontal: 16,
-    fontSize: 15,
-    color: '#1A1A1A',
-    backgroundColor: '#F9F9F9',
+    alignItems: 'center',
+    paddingTop: 20,
+  },
+  pressed: {
+    opacity: 0.8,
   },
 });

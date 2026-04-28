@@ -1,5 +1,5 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
@@ -18,6 +18,7 @@ import { apiClient } from '@/src/api/apiClient';
 import { geocodeAddress, buildRouteStaticMapUrl } from '@/src/api/geocode';
 import { applyLocalOrderStatus, setLocalOrderStatus } from '@/src/features/orders/local-order-status';
 import { isCancelledStatus, normalizeOrderStatus } from '@/src/features/orders/order-status';
+import { getReviewedOrder, resolveRestaurantIdForOrder } from '@/src/features/reviews/review-flow';
 
 const TIMELINE_LABELS = ['Order Placed', 'Order Confirmed', 'Being Prepared', 'Picked Up', 'Delivered'] as const;
 
@@ -78,6 +79,7 @@ export default function OrderTrackingScreen() {
   const [isItemsSheetOpen, setIsItemsSheetOpen] = useState(false);
   const [deliveryCoords, setDeliveryCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [restaurantCoords, setRestaurantCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [hasReviewedOrder, setHasReviewedOrder] = useState(false);
 
   const fetchOrder = useCallback(async () => {
     try {
@@ -112,6 +114,12 @@ export default function OrderTrackingScreen() {
     const interval = setInterval(fetchOrder, 5000);
     return () => clearInterval(interval);
   }, [fetchOrder]);
+
+  useFocusEffect(
+    useCallback(() => {
+      setHasReviewedOrder(!!getReviewedOrder(params.id));
+    }, [params.id])
+  );
 
   if (isLoading && !order) {
     return (
@@ -159,6 +167,7 @@ export default function OrderTrackingScreen() {
   else if (normalizedStatus.includes('cancel')) statusIndex = -1;
 
   const canCancelOrder = normalizedStatus === 'pending';
+  const canLeaveReview = normalizedStatus === 'delivered';
   const isCancelledOrder = isCancelledStatus(order.status);
 
   const placedAtDate = new Date(order.created_at);
@@ -211,6 +220,41 @@ export default function OrderTrackingScreen() {
     } finally {
       setIsCancelling(false);
       router.replace('/orders/history');
+    }
+  };
+
+  const openRestaurant = async () => {
+    try {
+      const restaurantId = await resolveRestaurantIdForOrder(order as Record<string, unknown>);
+      if (!restaurantId) {
+        Alert.alert('Restaurant unavailable', 'We could not find this restaurant right now.');
+        return;
+      }
+
+      router.push({ pathname: '/restaurant/[id]', params: { id: restaurantId } });
+    } catch {
+      Alert.alert('Restaurant unavailable', 'We could not open this restaurant right now.');
+    }
+  };
+
+  const openReview = async () => {
+    try {
+      const restaurantId = await resolveRestaurantIdForOrder(order as Record<string, unknown>);
+      if (!restaurantId) {
+        Alert.alert('Review unavailable', 'We could not find the restaurant for this order.');
+        return;
+      }
+
+      router.push({
+        pathname: '/reviews/[id]',
+        params: {
+          id: restaurantId,
+          orderId: String(order.id),
+          storeName: String(order.store_name ?? ''),
+        },
+      });
+    } catch {
+      Alert.alert('Review unavailable', 'We could not open the review page right now.');
     }
   };
 
@@ -467,6 +511,36 @@ export default function OrderTrackingScreen() {
               <Text style={styles.paymentValue}>{formatPrice(Number(order.total))}</Text>
             </View>
           </View>
+
+          {canLeaveReview ? (
+            <View style={styles.reviewActionsCard}>
+              <View style={styles.reviewActionsCopy}>
+                <Text style={styles.reviewActionsTitle}>
+                  {hasReviewedOrder ? 'Thanks for your feedback' : 'Rate this order'}
+                </Text>
+                <Text style={styles.reviewActionsSubtitle}>
+                  {hasReviewedOrder
+                    ? 'You can revisit your review or jump back to the restaurant any time.'
+                    : 'Share your experience and help other customers choose with confidence.'}
+                </Text>
+              </View>
+
+              <View style={styles.reviewActionsRow}>
+                <Pressable
+                  style={({ pressed }) => [styles.reviewSecondaryButton, pressed && styles.pressed]}
+                  onPress={openRestaurant}>
+                  <Text style={styles.reviewSecondaryButtonText}>View Restaurant</Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [styles.reviewPrimaryButton, pressed && styles.pressed]}
+                  onPress={openReview}>
+                  <Text style={styles.reviewPrimaryButtonText}>
+                    {hasReviewedOrder ? 'View Review' : 'Leave Review'}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
 
           <View style={styles.footerRow}>
             <Text style={styles.footerMuted}>Need help? </Text>
@@ -947,6 +1021,62 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 12,
     gap: 7,
+  },
+  reviewActionsCard: {
+    marginTop: 12,
+    marginHorizontal: 16,
+    borderRadius: 16,
+    backgroundColor: '#FFF7EF',
+    borderWidth: 1,
+    borderColor: '#F4D7B8',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  reviewActionsCopy: {
+    gap: 4,
+  },
+  reviewActionsTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#1A1A1A',
+  },
+  reviewActionsSubtitle: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#7A5A38',
+  },
+  reviewActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  reviewSecondaryButton: {
+    flex: 1,
+    height: 42,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5C8AA',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reviewSecondaryButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#7A4B20',
+  },
+  reviewPrimaryButton: {
+    flex: 1,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#AC1D10',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reviewPrimaryButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   paymentTitle: {
     fontSize: 14,
