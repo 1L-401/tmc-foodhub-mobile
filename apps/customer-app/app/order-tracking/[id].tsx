@@ -17,14 +17,9 @@ import { CheckoutSelectionItem } from '@/components/checkout';
 import { apiClient } from '@/src/api/apiClient';
 import { geocodeAddress, buildRouteStaticMapUrl } from '@/src/api/geocode';
 import { applyLocalOrderStatus, setLocalOrderStatus } from '@/src/features/orders/local-order-status';
+import { isCancelledStatus, normalizeOrderStatus } from '@/src/features/orders/order-status';
 
-const TIMELINE_LABELS = [
-  'Order Placed',
-  'Order Confirmed',
-  'Being Prepared',
-  'Picked Up',
-  'Delivered',
-] as const;
+const TIMELINE_LABELS = ['Order Placed', 'Order Confirmed', 'Being Prepared', 'Picked Up', 'Delivered'] as const;
 
 function formatPrice(value: number) {
   return `$${value.toFixed(2)}`;
@@ -35,10 +30,6 @@ function formatTime(dateValue: Date) {
     hour: 'numeric',
     minute: '2-digit',
   });
-}
-
-function normalizeOrderStatus(status: unknown) {
-  return String(status ?? '').trim().toLowerCase();
 }
 
 async function cancelPendingOrder(orderId: string) {
@@ -168,7 +159,7 @@ export default function OrderTrackingScreen() {
   else if (normalizedStatus.includes('cancel')) statusIndex = -1;
 
   const canCancelOrder = normalizedStatus === 'pending';
-  const isCancelledOrder = normalizedStatus.includes('cancel');
+  const isCancelledOrder = isCancelledStatus(order.status);
 
   const placedAtDate = new Date(order.created_at);
   const stepTimes = [0, 5, 15, 25, 40].map(

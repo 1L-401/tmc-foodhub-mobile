@@ -6,12 +6,13 @@ import React, { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import 'react-native-reanimated';
 
-const queryClient = new QueryClient();
-
 import { CartProvider } from '@/components/cart';
+import { OngoingOrderBar } from '@/components/orders/ongoing-order-bar';
 import { PaymentProvider } from '@/components/payment';
 import { AuthProvider, useAuth } from '@/contexts/auth-context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+
+const queryClient = new QueryClient();
 
 function RootStack() {
   const segments = useSegments();
@@ -46,30 +47,34 @@ function RootStack() {
   }
 
   return (
-    <Stack>
-      <Stack.Screen name="index" options={{ headerShown: false }} />
-      <Stack.Screen name="get-started" options={{ headerShown: false }} />
-      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="checkout" options={{ headerShown: false }} />
-      <Stack.Screen name="order-processing" options={{ headerShown: false }} />
-      <Stack.Screen name="payment-failed" options={{ headerShown: false }} />
-      <Stack.Screen name="order-tracking/[id]" options={{ headerShown: false }} />
-      <Stack.Screen name="delivery-address" options={{ headerShown: false }} />
-      <Stack.Screen name="add-address" options={{ headerShown: false }} />
-      <Stack.Screen name="add-payment-method" options={{ headerShown: false }} />
-      <Stack.Screen name="account-settings" options={{ headerShown: false }} />
-      <Stack.Screen name="verify-email" options={{ headerShown: false }} />
-      <Stack.Screen name="change-password" options={{ headerShown: false }} />
-      <Stack.Screen name="settings" options={{ headerShown: false }} />
-      <Stack.Screen name="notifications" options={{ headerShown: false }} />
-      <Stack.Screen name="privacy-security" options={{ headerShown: false }} />
-      <Stack.Screen name="notification-settings" options={{ headerShown: false }} />
-      <Stack.Screen name="terms-policies" options={{ headerShown: false }} />
-      <Stack.Screen name="help-support" options={{ headerShown: false }} />
-      <Stack.Screen name="restaurant/[id]" options={{ headerShown: false }} />
-      <Stack.Screen name="reviews/[id]" options={{ headerShown: false }} />
-    </Stack>
+    <View style={styles.stackContainer}>
+      <Stack>
+        <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="get-started" options={{ headerShown: false }} />
+        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="checkout" options={{ headerShown: false }} />
+        <Stack.Screen name="order-processing" options={{ headerShown: false }} />
+        <Stack.Screen name="payment-failed" options={{ headerShown: false }} />
+        <Stack.Screen name="order-tracking/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="delivery-address" options={{ headerShown: false }} />
+        <Stack.Screen name="add-address" options={{ headerShown: false }} />
+        <Stack.Screen name="add-payment-method" options={{ headerShown: false }} />
+        <Stack.Screen name="account-settings" options={{ headerShown: false }} />
+        <Stack.Screen name="verify-email" options={{ headerShown: false }} />
+        <Stack.Screen name="change-password" options={{ headerShown: false }} />
+        <Stack.Screen name="settings" options={{ headerShown: false }} />
+        <Stack.Screen name="notifications" options={{ headerShown: false }} />
+        <Stack.Screen name="privacy-security" options={{ headerShown: false }} />
+        <Stack.Screen name="notification-settings" options={{ headerShown: false }} />
+        <Stack.Screen name="terms-policies" options={{ headerShown: false }} />
+        <Stack.Screen name="help-support" options={{ headerShown: false }} />
+        <Stack.Screen name="restaurant/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="reviews/[id]" options={{ headerShown: false }} />
+      </Stack>
+
+      <OngoingOrderBar />
+    </View>
   );
 }
 
@@ -98,5 +103,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#FFFFFF',
+  },
+  stackContainer: {
+    flex: 1,
   },
 });
