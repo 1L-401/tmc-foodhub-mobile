@@ -12,7 +12,10 @@ export interface ReviewedOrderRecord {
   restaurantId: string;
   storeName: string;
   rating: number;
+  deliveryRating?: number;
   review: string;
+  highlights?: string[];
+  photoUris?: string[];
   reviewedAt: string;
 }
 
@@ -112,20 +115,49 @@ export async function resolveRestaurantIdForOrder(source: Record<string, unknown
 export async function submitReviewForOrder({
   orderId,
   restaurantId,
-  rating,
+  foodRating,
+  deliveryRating,
   review,
+  highlights,
+  photoAssets,
 }: {
   orderId: string;
   restaurantId: string;
-  rating: number;
+  foodRating: number;
+  deliveryRating?: number;
   review: string;
+  highlights?: string[];
+  photoAssets?: {
+    uri: string;
+    fileName?: string | null;
+    mimeType?: string | null;
+  }[];
 }) {
+  const formData = new FormData();
+
+  formData.append('rating', String(foodRating));
+  formData.append('food_rating', String(foodRating));
+  formData.append('review', review);
+  formData.append('order_id', orderId);
+
+  if (deliveryRating) {
+    formData.append('delivery_rating', String(deliveryRating));
+  }
+
+  highlights?.forEach((highlight, index) => {
+    formData.append(`highlights[${index}]`, highlight);
+  });
+
+  photoAssets?.forEach((asset, index) => {
+    formData.append(`photos[${index}]`, {
+      uri: asset.uri,
+      name: asset.fileName || `review-photo-${index + 1}.jpg`,
+      type: asset.mimeType || 'image/jpeg',
+    } as unknown as Blob);
+  });
+
   await apiClient(`/restaurants/${restaurantId}/reviews`, {
     method: 'POST',
-    body: JSON.stringify({
-      rating,
-      review,
-      order_id: orderId,
-    }),
+    body: formData,
   });
 }

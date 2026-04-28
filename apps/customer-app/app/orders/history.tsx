@@ -124,6 +124,9 @@ export default function OrderHistoryScreen() {
           id: restaurantId,
           orderId: String(order.id),
           storeName: order.store_name,
+          orderCreatedAt: order.created_at,
+          orderNumber: `#${order.id}`,
+          itemImage: order.items[0]?.image ?? '',
         },
       });
     } catch {

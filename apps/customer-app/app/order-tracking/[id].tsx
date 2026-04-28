@@ -251,6 +251,9 @@ export default function OrderTrackingScreen() {
           id: restaurantId,
           orderId: String(order.id),
           storeName: String(order.store_name ?? ''),
+          orderCreatedAt: String(order.created_at ?? ''),
+          orderNumber: `#${order.id}`,
+          itemImage: String(order.items?.[0]?.image ?? ''),
         },
       });
     } catch {
