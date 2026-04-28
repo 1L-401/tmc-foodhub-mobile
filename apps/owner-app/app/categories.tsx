@@ -1,7 +1,9 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Modal,
   Pressable,
@@ -14,37 +16,36 @@ import {
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-/* ─── Icon Options ─── */
-const ICON_OPTIONS: { name: string; label: string }[] = [
-  { name: 'hamburger', label: 'Burger' },
-  { name: 'glass-wine', label: 'Wine' },
-  { name: 'coffee', label: 'Coffee' },
-  { name: 'food-drumstick', label: 'Chicken' },
-  { name: 'cupcake', label: 'Dessert' },
-  { name: 'food-fork-drink', label: 'Meal' },
-  { name: 'pizza', label: 'Pizza' },
-  { name: 'fish', label: 'Fish' },
-  { name: 'rice', label: 'Rice' },
-  { name: 'ice-cream', label: 'Ice Cream' },
-];
+import {
+  createInventoryCategory,
+  deleteInventoryCategory,
+  fetchInventoryCategories,
+  fetchInventoryItems,
+  inventoryQueryKeys,
+  reorderInventoryCategories,
+  updateInventoryCategory,
+  type InventoryCategory,
+} from '@/services/inventoryService';
 
 /* ─── Types ─── */
-interface Category {
-  id: string;
-  name: string;
-  icon: string;
-  description: string;
+type CategoryRowItem = InventoryCategory & {
   itemCount: number;
-}
+};
 
-/* ─── Mock Data ─── */
-const INITIAL_CATEGORIES: Category[] = [
-  { id: '1', name: 'Burgers', icon: 'hamburger', description: 'All burger varieties', itemCount: 8 },
-  { id: '2', name: 'Pizzas', icon: 'pizza', description: 'Pizza selections', itemCount: 4 },
-  { id: '3', name: 'Main Courses', icon: 'food-fork-drink', description: 'Main course dishes', itemCount: 12 },
-  { id: '4', name: 'Desserts', icon: 'cupcake', description: 'Sweet treats', itemCount: 8 },
-  { id: '5', name: 'Beverages', icon: 'coffee', description: 'Drinks and beverages', itemCount: 14 },
-];
+const resolveCategoryIcon = (name: string) => {
+  const value = name.toLowerCase();
+
+  if (value.includes('burger')) return 'hamburger';
+  if (value.includes('pizza')) return 'pizza';
+  if (value.includes('dessert') || value.includes('cake') || value.includes('ice')) return 'cupcake';
+  if (value.includes('coffee') || value.includes('drink') || value.includes('beverage')) return 'coffee';
+  if (value.includes('fish')) return 'fish';
+  if (value.includes('chicken')) return 'food-drumstick';
+  if (value.includes('rice')) return 'rice';
+  if (value.includes('main') || value.includes('meal')) return 'food-fork-drink';
+
+  return 'shape-outline';
+};
 
 /* ══════════════════════════════════════════════
    Category Row
@@ -54,25 +55,51 @@ function CategoryRow({
   index,
   onEdit,
   onDelete,
+  onMove,
+  canMoveUp,
+  canMoveDown,
+  isReordering,
 }: {
-  category: Category;
+  category: CategoryRowItem;
   index: number;
-  onEdit: (cat: Category) => void;
-  onDelete: (cat: Category) => void;
+  onEdit: (cat: CategoryRowItem) => void;
+  onDelete: (cat: CategoryRowItem) => void;
+  onMove: (categoryId: number, direction: 'up' | 'down') => void;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  isReordering: boolean;
 }) {
   return (
     <Animated.View
       entering={FadeInDown.delay(300 + index * 60).duration(400)}
       style={rowStyles.container}>
-      {/* Drag handle */}
-      <View style={rowStyles.dragHandle}>
-        <MaterialCommunityIcons name="dots-grid" size={18} color="#CCC" />
+      <View style={rowStyles.reorderColumn}>
+        <Pressable
+          style={({ pressed }) => [
+            rowStyles.reorderBtn,
+            (pressed && !isReordering && canMoveUp) && { opacity: 0.6 },
+            (!canMoveUp || isReordering) && rowStyles.reorderBtnDisabled,
+          ]}
+          onPress={() => onMove(category.id, 'up')}
+          disabled={!canMoveUp || isReordering}>
+          <MaterialCommunityIcons name="chevron-up" size={16} color="#888" />
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [
+            rowStyles.reorderBtn,
+            (pressed && !isReordering && canMoveDown) && { opacity: 0.6 },
+            (!canMoveDown || isReordering) && rowStyles.reorderBtnDisabled,
+          ]}
+          onPress={() => onMove(category.id, 'down')}
+          disabled={!canMoveDown || isReordering}>
+          <MaterialCommunityIcons name="chevron-down" size={16} color="#888" />
+        </Pressable>
       </View>
 
       {/* Icon */}
       <View style={rowStyles.iconWrap}>
         <MaterialCommunityIcons
-          name={category.icon as any}
+          name={resolveCategoryIcon(category.name) as any}
           size={18}
           color="#AC1D10"
         />
@@ -186,27 +213,23 @@ function CategoryFormModal({
   category,
   onClose,
   onSave,
+  isSaving,
 }: {
   visible: boolean;
-  category: Category | null;
+  category: InventoryCategory | null;
   onClose: () => void;
-  onSave: (data: { name: string; icon: string; description: string }) => void;
+  onSave: (data: { name: string }) => void;
+  isSaving: boolean;
 }) {
   const isEdit = category !== null;
   const [name, setName] = React.useState('');
-  const [selectedIcon, setSelectedIcon] = React.useState('hamburger');
-  const [description, setDescription] = React.useState('');
 
   React.useEffect(() => {
     if (visible) {
       if (category) {
         setName(category.name);
-        setSelectedIcon(category.icon);
-        setDescription(category.description);
       } else {
         setName('');
-        setSelectedIcon('hamburger');
-        setDescription('');
       }
     }
   }, [visible, category]);
@@ -216,7 +239,7 @@ function CategoryFormModal({
       Alert.alert('Validation', 'Please enter a category name.');
       return;
     }
-    onSave({ name: name.trim(), icon: selectedIcon, description: description.trim() });
+    onSave({ name: name.trim() });
   };
 
   return (
@@ -250,43 +273,6 @@ function CategoryFormModal({
               />
             </View>
 
-            {/* Choose Icon */}
-            <View style={modalStyles.field}>
-              <Text style={modalStyles.label}>Choose Icon</Text>
-              <View style={modalStyles.iconGrid}>
-                {ICON_OPTIONS.map((icon) => (
-                  <Pressable
-                    key={icon.name}
-                    style={[
-                      modalStyles.iconOption,
-                      selectedIcon === icon.name && modalStyles.iconOptionActive,
-                    ]}
-                    onPress={() => setSelectedIcon(icon.name)}>
-                    <MaterialCommunityIcons
-                      name={icon.name as any}
-                      size={20}
-                      color={selectedIcon === icon.name ? '#FFF' : '#888'}
-                    />
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-
-            {/* Description */}
-            <View style={modalStyles.field}>
-              <Text style={modalStyles.label}>Description (Optional)</Text>
-              <TextInput
-                style={[modalStyles.input, modalStyles.textArea]}
-                value={description}
-                onChangeText={setDescription}
-                placeholder="Write the description..."
-                placeholderTextColor="#AAA"
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-              />
-            </View>
-
             {/* Buttons */}
             <View style={modalStyles.buttonRow}>
               <Pressable
@@ -301,10 +287,12 @@ function CategoryFormModal({
                 style={({ pressed }) => [
                   modalStyles.saveBtn,
                   pressed && { opacity: 0.8 },
+                  isSaving && { opacity: 0.6 },
                 ]}
-                onPress={handleSave}>
+                onPress={handleSave}
+                disabled={isSaving}>
                 <Text style={modalStyles.saveBtnText}>
-                  {isEdit ? 'Save Changes' : 'Create Category'}
+                  {isSaving ? 'Saving...' : isEdit ? 'Save Changes' : 'Create Category'}
                 </Text>
               </Pressable>
             </View>
@@ -319,17 +307,101 @@ function CategoryFormModal({
    Main Screen
    ══════════════════════════════════════════════ */
 export default function CategoriesScreen() {
-  const [categories, setCategories] = useState<Category[]>(INITIAL_CATEGORIES);
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [showFormModal, setShowFormModal] = useState(false);
-  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [editingCategory, setEditingCategory] = useState<InventoryCategory | null>(null);
+
+  const categoriesQuery = useQuery({
+    queryKey: inventoryQueryKeys.categories,
+    queryFn: fetchInventoryCategories,
+  });
+
+  const itemsQuery = useQuery({
+    queryKey: inventoryQueryKeys.items,
+    queryFn: fetchInventoryItems,
+  });
+
+  const categories = categoriesQuery.data ?? [];
+  const items = itemsQuery.data ?? [];
+
+  const itemCounts = useMemo(() => {
+    const counts = new Map<number, number>();
+
+    items.forEach((item) => {
+      const categoryId = item.category?.id ?? item.category_id;
+      if (categoryId == null) {
+        return;
+      }
+      counts.set(categoryId, (counts.get(categoryId) ?? 0) + 1);
+    });
+
+    return counts;
+  }, [items]);
+
+  const displayCategories = useMemo<CategoryRowItem[]>(
+    () =>
+      categories.map((category) => ({
+        ...category,
+        itemCount: itemCounts.get(category.id) ?? 0,
+      })),
+    [categories, itemCounts],
+  );
+
+  const categoryIndexById = useMemo(
+    () => new Map(categories.map((category, index) => [category.id, index])),
+    [categories],
+  );
+
+  const showError = (title: string, error: unknown) => {
+    const message = error instanceof Error
+      ? error.message
+      : 'Please try again in a moment.';
+    Alert.alert(title, message);
+  };
+
+  const createCategoryMutation = useMutation({
+    mutationFn: (payload: { name: string }) => createInventoryCategory(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: inventoryQueryKeys.categories });
+      setShowFormModal(false);
+      setEditingCategory(null);
+    },
+    onError: (error) => showError('Create failed', error),
+  });
+
+  const updateCategoryMutation = useMutation({
+    mutationFn: ({ id, name }: { id: number; name: string }) =>
+      updateInventoryCategory(id, { name }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: inventoryQueryKeys.categories });
+      setShowFormModal(false);
+      setEditingCategory(null);
+    },
+    onError: (error) => showError('Update failed', error),
+  });
+
+  const deleteCategoryMutation = useMutation({
+    mutationFn: (id: number) => deleteInventoryCategory(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: inventoryQueryKeys.categories });
+    },
+    onError: (error) => showError('Delete failed', error),
+  });
+
+  const reorderCategoryMutation = useMutation({
+    mutationFn: (categoryIds: number[]) => reorderInventoryCategories(categoryIds),
+    onError: (error) => showError('Reorder failed', error),
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: inventoryQueryKeys.categories }),
+  });
 
   /* ─── Filtered ─── */
   const filtered = searchQuery.trim()
-    ? categories.filter((c) =>
+    ? displayCategories.filter((c) =>
         c.name.toLowerCase().includes(searchQuery.toLowerCase()),
       )
-    : categories;
+    : displayCategories;
 
   /* ─── Handlers ─── */
   const handleAdd = useCallback(() => {
@@ -337,12 +409,12 @@ export default function CategoriesScreen() {
     setShowFormModal(true);
   }, []);
 
-  const handleEdit = useCallback((cat: Category) => {
+  const handleEdit = useCallback((cat: CategoryRowItem) => {
     setEditingCategory(cat);
     setShowFormModal(true);
   }, []);
 
-  const handleDelete = useCallback((cat: Category) => {
+  const handleDelete = useCallback((cat: CategoryRowItem) => {
     Alert.alert(
       'Delete Category',
       `Are you sure you want to delete "${cat.name}"? Items in this category won't be deleted.`,
@@ -352,44 +424,65 @@ export default function CategoriesScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
-            setCategories((prev) => prev.filter((c) => c.id !== cat.id));
+            deleteCategoryMutation.mutate(cat.id);
           },
         },
       ],
     );
-  }, []);
+  }, [deleteCategoryMutation]);
 
   const handleSave = useCallback(
-    (data: { name: string; icon: string; description: string }) => {
+    (data: { name: string }) => {
       if (editingCategory) {
-        // Edit
-        setCategories((prev) =>
-          prev.map((c) =>
-            c.id === editingCategory.id
-              ? { ...c, name: data.name, icon: data.icon, description: data.description }
-              : c,
-          ),
-        );
-        Alert.alert('Success', `"${data.name}" has been updated.`, [
-          { text: 'OK', onPress: () => setShowFormModal(false) },
-        ]);
-      } else {
-        // Create
-        const newCat: Category = {
-          id: Date.now().toString(),
-          name: data.name,
-          icon: data.icon,
-          description: data.description,
-          itemCount: 0,
-        };
-        setCategories((prev) => [...prev, newCat]);
-        Alert.alert('Success', `"${data.name}" has been created.`, [
-          { text: 'OK', onPress: () => setShowFormModal(false) },
-        ]);
+        updateCategoryMutation.mutate({ id: editingCategory.id, name: data.name });
+        return;
       }
+
+      createCategoryMutation.mutate({ name: data.name });
     },
-    [editingCategory],
+    [createCategoryMutation, editingCategory, updateCategoryMutation],
   );
+
+  const handleMove = useCallback(
+    (categoryId: number, direction: 'up' | 'down') => {
+      if (reorderCategoryMutation.isPending) {
+        return;
+      }
+
+      const currentOrder = categories.map((category) => category.id);
+      const index = currentOrder.indexOf(categoryId);
+      if (index < 0) {
+        return;
+      }
+
+      const targetIndex = direction === 'up' ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= currentOrder.length) {
+        return;
+      }
+
+      const nextOrder = [...currentOrder];
+      [nextOrder[index], nextOrder[targetIndex]] = [
+        nextOrder[targetIndex],
+        nextOrder[index],
+      ];
+
+      reorderCategoryMutation.mutate(nextOrder);
+    },
+    [categories, reorderCategoryMutation],
+  );
+
+  const isLoading = categoriesQuery.isLoading || itemsQuery.isLoading;
+  const hasError = categoriesQuery.isError || itemsQuery.isError;
+  const errorMessage = (() => {
+    const error = categoriesQuery.error ?? itemsQuery.error;
+    if (!error) {
+      return 'Unable to load categories.';
+    }
+    return error instanceof Error ? error.message : 'Unable to load categories.';
+  })();
+
+  const showLoadingState = isLoading && categories.length === 0;
+  const isSaving = createCategoryMutation.isPending || updateCategoryMutation.isPending;
 
   /* ─── Render ─── */
   return (
@@ -452,7 +545,29 @@ export default function CategoriesScreen() {
             </Text>
           </Animated.View>
 
-          {categories.length > 0 ? (
+          {hasError ? (
+            <View style={styles.errorState}>
+              <MaterialCommunityIcons name="alert-circle" size={40} color="#DC2626" />
+              <Text style={styles.errorTitle}>Unable to load categories</Text>
+              <Text style={styles.errorSubtitle}>{errorMessage}</Text>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.retryBtn,
+                  pressed && { opacity: 0.7 },
+                ]}
+                onPress={() => {
+                  categoriesQuery.refetch();
+                  itemsQuery.refetch();
+                }}>
+                <Text style={styles.retryText}>Try Again</Text>
+              </Pressable>
+            </View>
+          ) : showLoadingState ? (
+            <View style={styles.loadingState}>
+              <ActivityIndicator size="large" color="#AC1D10" />
+              <Text style={styles.loadingText}>Loading categories...</Text>
+            </View>
+          ) : categories.length > 0 ? (
             <>
               {/* ── Add Category Button ── */}
               <Animated.View entering={FadeInDown.delay(200).duration(400)}>
@@ -493,6 +608,10 @@ export default function CategoriesScreen() {
                   index={i}
                   onEdit={handleEdit}
                   onDelete={handleDelete}
+                  onMove={handleMove}
+                  canMoveUp={(categoryIndexById.get(cat.id) ?? 0) > 0}
+                  canMoveDown={(categoryIndexById.get(cat.id) ?? 0) < categories.length - 1}
+                  isReordering={reorderCategoryMutation.isPending}
                 />
               ))}
 
@@ -522,6 +641,7 @@ export default function CategoriesScreen() {
           setEditingCategory(null);
         }}
         onSave={handleSave}
+        isSaving={isSaving}
       />
     </SafeAreaView>
   );
@@ -615,6 +735,41 @@ const styles = StyleSheet.create({
   /* No Results */
   noResults: { paddingVertical: 30, alignItems: 'center' },
   noResultsText: { fontSize: 13, color: '#999' },
+  loadingState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 50,
+    gap: 10,
+  },
+  loadingText: {
+    fontSize: 13,
+    color: '#666',
+  },
+  errorState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 50,
+    gap: 8,
+  },
+  errorTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  errorSubtitle: {
+    fontSize: 13,
+    color: '#888',
+    textAlign: 'center',
+    paddingHorizontal: 20,
+  },
+  retryBtn: {
+    marginTop: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: '#AC1D10',
+  },
+  retryText: { fontSize: 12, fontWeight: '700', color: '#FFF' },
 });
 
 /* ─── Row Styles ─── */
@@ -628,9 +783,21 @@ const rowStyles = StyleSheet.create({
     borderBottomColor: '#F0F0F0',
     gap: 10,
   },
-  dragHandle: {
-    width: 20,
+  reorderColumn: {
+    width: 24,
     alignItems: 'center',
+    gap: 2,
+  },
+  reorderBtn: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    backgroundColor: '#F5F5F5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reorderBtnDisabled: {
+    opacity: 0.4,
   },
   iconWrap: {
     width: 32,
@@ -788,31 +955,6 @@ const modalStyles = StyleSheet.create({
     fontSize: 13,
     color: '#1A1A1A',
     backgroundColor: '#FAFAFA',
-  },
-  textArea: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-
-  /* Icon Grid */
-  iconGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  iconOption: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: '#F5F5F5',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: 'transparent',
-  },
-  iconOptionActive: {
-    backgroundColor: '#AC1D10',
-    borderColor: '#AC1D10',
   },
 
   /* Buttons */
