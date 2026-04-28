@@ -1,4 +1,16 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 export const BASE_URL = 'https://foodhub.tmc-innovations.com/api';
+
+const OWNER_AUTH_TOKEN_STORAGE_KEY = 'owner.auth.token';
+
+const getStoredToken = async (): Promise<string | null> => {
+  try {
+    return await AsyncStorage.getItem(OWNER_AUTH_TOKEN_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+};
 
 /**
  * A centralized API Client designed to be used with React Query.
@@ -6,20 +18,16 @@ export const BASE_URL = 'https://foodhub.tmc-innovations.com/api';
  */
 export const apiClient = async <T>(endpoint: string, options?: RequestInit): Promise<T> => {
   const url = `${BASE_URL}${endpoint}`;
-  
-  // NOTE: Insert SecureStore token retrieval here in the future
-  // const token = await SecureStore.getItemAsync('userToken');
+  const token = await getStoredToken();
 
   const defaultHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   };
 
-  /*
   if (token) {
     defaultHeaders['Authorization'] = `Bearer ${token}`;
   }
-  */
 
   const response = await fetch(url, {
     ...options,
@@ -36,7 +44,7 @@ export const apiClient = async <T>(endpoint: string, options?: RequestInit): Pro
       const errorData = await response.json();
       if (errorData?.message) errorMessage = errorData.message;
       if (errorData?.error) errorMessage = errorData.error;
-    } catch (e) {
+    } catch {
       // Ignored
     }
     throw new Error(`Error ${response.status}: ${errorMessage}`);

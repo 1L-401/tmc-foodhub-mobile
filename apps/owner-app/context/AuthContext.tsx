@@ -1,18 +1,22 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppState } from 'react-native';
 import React, {
   createContext,
   useCallback,
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type PropsWithChildren,
 } from 'react';
 
 import { loginOwner, type OwnerUser } from '@/services/authService';
+import { fetchOwnerProfile } from '@/services/ownerProfileService';
 
 const AUTH_TOKEN_STORAGE_KEY = 'owner.auth.token';
 const AUTH_USER_STORAGE_KEY = 'owner.auth.user';
+const PROFILE_REFRESH_INTERVAL_MS = 60_000;
 
 type LoginResult =
   | { success: true }
@@ -33,8 +37,10 @@ type AuthContextValue = {
   user: OwnerUser | null;
   isAuthenticated: boolean;
   isHydrating: boolean;
+  isProfileRefreshing: boolean;
   login: (email: string, password: string) => Promise<LoginResult>;
   logout: () => Promise<LogoutResult>;
+  refreshOwnerProfile: (tokenOverride?: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -61,6 +67,15 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<OwnerUser | null>(null);
   const [isHydrating, setIsHydrating] = useState(true);
+  const [isProfileRefreshing, setIsProfileRefreshing] = useState(false);
+  const isMountedRef = useRef(true);
+  const isRefreshingRef = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -116,6 +131,39 @@ export function AuthProvider({ children }: PropsWithChildren) {
     ]);
   }, []);
 
+  const refreshOwnerProfile = useCallback(async (tokenOverride?: string) => {
+    const activeToken = tokenOverride ?? token;
+
+    if (!activeToken || isRefreshingRef.current) {
+      return;
+    }
+
+    isRefreshingRef.current = true;
+
+    if (isMountedRef.current) {
+      setIsProfileRefreshing(true);
+    }
+
+    try {
+      const profile = await fetchOwnerProfile(activeToken);
+
+      if (!isMountedRef.current) {
+        return;
+      }
+
+      setUser(profile);
+      await persistAuthSession(activeToken, profile);
+    } catch {
+      // Keep the existing profile if refresh fails.
+    } finally {
+      if (isMountedRef.current) {
+        setIsProfileRefreshing(false);
+      }
+
+      isRefreshingRef.current = false;
+    }
+  }, [persistAuthSession, token]);
+
   const login = useCallback(async (email: string, password: string): Promise<LoginResult> => {
     try {
       const result = await loginOwner({ email, password });
@@ -124,6 +172,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setToken(result.token);
       setUser(resolvedUser);
       await persistAuthSession(result.token, resolvedUser);
+      await refreshOwnerProfile(result.token);
 
       return { success: true };
     } catch (error) {
@@ -159,16 +208,50 @@ export function AuthProvider({ children }: PropsWithChildren) {
     return { success: true };
   }, [clearAuthSession]);
 
+  useEffect(() => {
+    if (isHydrating || !token) {
+      return;
+    }
+
+    void refreshOwnerProfile();
+  }, [isHydrating, refreshOwnerProfile, token]);
+
+  useEffect(() => {
+    if (!token) {
+      return;
+    }
+
+    const handleAppStateChange = (nextState: string) => {
+      if (nextState === 'active') {
+        void refreshOwnerProfile();
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    const intervalId = setInterval(() => {
+      if (AppState.currentState === 'active') {
+        void refreshOwnerProfile();
+      }
+    }, PROFILE_REFRESH_INTERVAL_MS);
+
+    return () => {
+      subscription.remove();
+      clearInterval(intervalId);
+    };
+  }, [refreshOwnerProfile, token]);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       token,
       user,
       isHydrating,
+      isProfileRefreshing,
       isAuthenticated: Boolean(token),
       login,
       logout,
+      refreshOwnerProfile,
     }),
-    [isHydrating, login, logout, token, user],
+    [isHydrating, isProfileRefreshing, login, logout, refreshOwnerProfile, token, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

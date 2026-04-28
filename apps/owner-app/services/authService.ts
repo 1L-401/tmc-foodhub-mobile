@@ -7,7 +7,12 @@ type RecordValue = Record<string, unknown>;
 export type OwnerUser = {
   id?: number | string;
   name?: string;
+  first_name?: string;
+  last_name?: string;
   email?: string;
+  restaurant_name?: string;
+  logo?: string;
+  cover_image?: string;
   [key: string]: unknown;
 };
 

@@ -7,6 +7,7 @@ import {
   Image,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -17,11 +18,62 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CustomToggle } from '@/components/custom-toggle';
 import { useAuth } from '@/context/AuthContext';
+import type { OwnerUser } from '@/services/authService';
 
-const PROFILE = {
-  name: 'Juan Dela Cruz',
-  role: 'Restaurant Owner',
-  avatar: 'https://via.placeholder.com/80/E8E8E8/999?text=JD',
+const PLACEHOLDER_AVATAR_BASE = 'https://via.placeholder.com/80/E8E8E8/999?text=';
+
+const getInitials = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return 'RO';
+  }
+
+  return trimmed
+    .split(/\s+/)
+    .map((segment) => segment[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+};
+
+const buildOwnerName = (user: OwnerUser | null) => {
+  if (!user) {
+    return 'Owner';
+  }
+
+  const directName = user.name?.trim();
+  if (directName) {
+    return directName;
+  }
+
+  const firstName = user.first_name?.trim() ?? '';
+  const lastName = user.last_name?.trim() ?? '';
+  const combined = `${firstName} ${lastName}`.trim();
+
+  if (combined) {
+    return combined;
+  }
+
+  return user.email?.trim() || 'Owner';
+};
+
+const buildRestaurantName = (user: OwnerUser | null) => {
+  const restaurantName = user?.restaurant_name?.trim();
+  return restaurantName || 'Restaurant Owner';
+};
+
+const buildAvatarUrl = (logo: string | undefined, fallbackInitials: string) => {
+  const trimmedLogo = logo?.trim();
+
+  if (trimmedLogo) {
+    if (trimmedLogo.startsWith('http://') || trimmedLogo.startsWith('https://')) {
+      return trimmedLogo;
+    }
+
+    return `https://foodhub.tmc-innovations.com/${trimmedLogo.replace(/^\/+/, '')}`;
+  }
+
+  return `${PLACEHOLDER_AVATAR_BASE}${encodeURIComponent(fallbackInitials)}`;
 };
 
 interface MenuItemProps {
@@ -54,8 +106,16 @@ function SectionHeader({ title }: { title: string }) {
 export default function MoreScreen() {
   const [darkMode, setDarkMode] = React.useState(false);
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
-  const { logout } = useAuth();
+  const { logout, user, refreshOwnerProfile, isProfileRefreshing } = useAuth();
   const isMountedRef = React.useRef(true);
+
+  const ownerName = React.useMemo(() => buildOwnerName(user), [user]);
+  const ownerEmail = user?.email?.trim() ?? '';
+  const restaurantName = React.useMemo(() => buildRestaurantName(user), [user]);
+  const avatarUrl = React.useMemo(
+    () => buildAvatarUrl(user?.logo, getInitials(ownerName)),
+    [ownerName, user?.logo],
+  );
 
   React.useEffect(() => {
     return () => {
@@ -116,6 +176,10 @@ export default function MoreScreen() {
     ]);
   }, [handleLogoutConfirmed, isLoggingOut]);
 
+  const handleRefresh = React.useCallback(() => {
+    void refreshOwnerProfile();
+  }, [refreshOwnerProfile]);
+
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.container}>
@@ -141,19 +205,31 @@ export default function MoreScreen() {
 
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scroll}>
+          contentContainerStyle={styles.scroll}
+          refreshControl={
+            <RefreshControl
+              refreshing={isProfileRefreshing}
+              onRefresh={handleRefresh}
+            />
+          }>
           {/* Profile */}
           <Animated.View
             entering={FadeInDown.delay(100).duration(400)}
             style={styles.profileCard}>
             <Image
-              source={{ uri: PROFILE.avatar }}
+              source={{ uri: avatarUrl }}
               style={styles.profileAvatar}
             />
-            <View>
-              <Text style={styles.profileName}>{PROFILE.name}</Text>
-              <Text style={styles.profileRole}>{PROFILE.role}</Text>
+            <View style={styles.profileText}>
+              <Text style={styles.profileName}>{ownerName}</Text>
+              {ownerEmail ? (
+                <Text style={styles.profileEmail}>{ownerEmail}</Text>
+              ) : null}
+              <Text style={styles.profileRole}>{restaurantName}</Text>
             </View>
+            {isProfileRefreshing ? (
+              <ActivityIndicator size="small" color="#999" />
+            ) : null}
           </Animated.View>
 
           <View style={styles.divider} />
@@ -297,6 +373,9 @@ const styles = StyleSheet.create({
     gap: 14,
     paddingVertical: 16,
   },
+  profileText: {
+    flex: 1,
+  },
   profileAvatar: {
     width: 52,
     height: 52,
@@ -304,6 +383,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0F0F0',
   },
   profileName: { fontSize: 16, fontWeight: '700', color: '#1A1A1A' },
+  profileEmail: { fontSize: 12, color: '#777', marginTop: 2 },
   profileRole: { fontSize: 13, color: '#999', marginTop: 2 },
 
   divider: {
