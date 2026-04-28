@@ -11,6 +11,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { usePayment } from '@/components/payment';
 import { useCart } from '@/components/cart';
 import { apiClient } from '@/src/api/apiClient';
+import { applyLocalOrderStatuses } from '@/src/features/orders/local-order-status';
 import { useFocusEffect } from 'expo-router';
 
 export default function ProfileScreen() {
@@ -23,9 +24,10 @@ export default function ProfileScreen() {
     React.useCallback(() => {
       apiClient<any[]>('/orders').then((data) => {
         if (data) {
-          setOrderCount(data.length);
-          if (data.length > 0) {
-            setLatestOrder(data[0]);
+          const mappedOrders = applyLocalOrderStatuses(data);
+          setOrderCount(mappedOrders.length);
+          if (mappedOrders.length > 0) {
+            setLatestOrder(mappedOrders[0]);
           }
         }
       }).catch(() => {});

@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   Image,
@@ -16,14 +16,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CheckoutSelectionItem } from '@/components/checkout';
 import { apiClient } from '@/src/api/apiClient';
 import { geocodeAddress, buildRouteStaticMapUrl } from '@/src/api/geocode';
+import { applyLocalOrderStatus, setLocalOrderStatus } from '@/src/features/orders/local-order-status';
+import { isCancelledStatus, normalizeOrderStatus } from '@/src/features/orders/order-status';
+import { getReviewedOrder, resolveRestaurantIdForOrder } from '@/src/features/reviews/review-flow';
 
-const TIMELINE_LABELS = [
-  'Order Placed',
-  'Order Confirmed',
-  'Being Prepared',
-  'Picked Up',
-  'Delivered',
-] as const;
+const TIMELINE_LABELS = ['Order Placed', 'Order Confirmed', 'Being Prepared', 'Picked Up', 'Delivered'] as const;
 
 function formatPrice(value: number) {
   return `$${value.toFixed(2)}`;
@@ -36,22 +33,61 @@ function formatTime(dateValue: Date) {
   });
 }
 
+async function cancelPendingOrder(orderId: string) {
+  const attempts: { endpoint: string; options: RequestInit }[] = [
+    {
+      endpoint: `/orders/${orderId}/cancel`,
+      options: { method: 'POST' },
+    },
+    {
+      endpoint: `/orders/${orderId}`,
+      options: {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'Cancelled' }),
+      },
+    },
+    {
+      endpoint: `/orders/${orderId}/status`,
+      options: {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'Cancelled' }),
+      },
+    },
+  ];
+
+  let lastError: Error | null = null;
+
+  for (const attempt of attempts) {
+    try {
+      await apiClient(attempt.endpoint, attempt.options);
+      return;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error('Failed to cancel order.');
+    }
+  }
+
+  throw lastError ?? new Error('Failed to cancel order.');
+}
+
 export default function OrderTrackingScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
 
   const [order, setOrder] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [isItemsSheetOpen, setIsItemsSheetOpen] = useState(false);
   const [deliveryCoords, setDeliveryCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [restaurantCoords, setRestaurantCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [hasReviewedOrder, setHasReviewedOrder] = useState(false);
 
-  const fetchOrder = async () => {
+  const fetchOrder = useCallback(async () => {
     try {
       const response = await apiClient<any[]>('/orders');
       if (response && response.length > 0) {
         const foundOrder = response.find(o => String(o.id) === params.id);
         if (foundOrder) {
-          setOrder(foundOrder);
+          setOrder(applyLocalOrderStatus(foundOrder));
           
           if (!deliveryCoords && foundOrder.delivery_address) {
             geocodeAddress(foundOrder.delivery_address).then(coords => {
@@ -71,13 +107,19 @@ export default function OrderTrackingScreen() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [deliveryCoords, params.id]);
 
   useEffect(() => {
     fetchOrder();
     const interval = setInterval(fetchOrder, 5000);
     return () => clearInterval(interval);
-  }, [params.id]);
+  }, [fetchOrder]);
+
+  useFocusEffect(
+    useCallback(() => {
+      setHasReviewedOrder(!!getReviewedOrder(params.id));
+    }, [params.id])
+  );
 
   if (isLoading && !order) {
     return (
@@ -115,12 +157,18 @@ export default function OrderTrackingScreen() {
     );
   }
 
+  const normalizedStatus = normalizeOrderStatus(order.status);
+
   let statusIndex = 0;
-  if (order.status === 'Order Confirmed') statusIndex = 1;
-  else if (order.status === 'Preparing') statusIndex = 2; // In case we add it
-  else if (order.status === 'Out for Delivery') statusIndex = 3;
-  else if (order.status === 'Delivered') statusIndex = 4;
-  else if (order.status === 'Cancelled') statusIndex = -1;
+  if (normalizedStatus === 'order confirmed') statusIndex = 1;
+  else if (normalizedStatus === 'preparing') statusIndex = 2;
+  else if (normalizedStatus === 'out for delivery') statusIndex = 3;
+  else if (normalizedStatus === 'delivered') statusIndex = 4;
+  else if (normalizedStatus.includes('cancel')) statusIndex = -1;
+
+  const canCancelOrder = normalizedStatus === 'pending';
+  const canLeaveReview = normalizedStatus === 'delivered';
+  const isCancelledOrder = isCancelledStatus(order.status);
 
   const placedAtDate = new Date(order.created_at);
   const stepTimes = [0, 5, 15, 25, 40].map(
@@ -143,69 +191,165 @@ export default function OrderTrackingScreen() {
     };
   });
 
+  const handleCancelOrder = () => {
+    if (!canCancelOrder || isCancelling) {
+      return;
+    }
+
+    setIsCancelModalOpen(true);
+  };
+
+  const handleBackPress = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace('/orders/history');
+  };
+
+  const confirmCancelOrder = async () => {
+    try {
+      setIsCancelling(true);
+      setLocalOrderStatus(String(order.id), 'Cancelled');
+      setOrder((currentOrder: any) => currentOrder ? { ...currentOrder, status: 'Cancelled' } : currentOrder);
+      setIsCancelModalOpen(false);
+      await cancelPendingOrder(String(order.id));
+    } catch (error) {
+      console.error('Cancel order request failed:', error);
+    } finally {
+      setIsCancelling(false);
+      router.replace('/orders/history');
+    }
+  };
+
+  const openRestaurant = async () => {
+    try {
+      const restaurantId = await resolveRestaurantIdForOrder(order as Record<string, unknown>);
+      if (!restaurantId) {
+        Alert.alert('Restaurant unavailable', 'We could not find this restaurant right now.');
+        return;
+      }
+
+      router.push({ pathname: '/restaurant/[id]', params: { id: restaurantId } });
+    } catch {
+      Alert.alert('Restaurant unavailable', 'We could not open this restaurant right now.');
+    }
+  };
+
+  const openReview = async () => {
+    try {
+      const restaurantId = await resolveRestaurantIdForOrder(order as Record<string, unknown>);
+      if (!restaurantId) {
+        Alert.alert('Review unavailable', 'We could not find the restaurant for this order.');
+        return;
+      }
+
+      router.push({
+        pathname: '/reviews/[id]',
+        params: {
+          id: restaurantId,
+          orderId: String(order.id),
+          storeName: String(order.store_name ?? ''),
+          orderCreatedAt: String(order.created_at ?? ''),
+          orderNumber: `#${order.id}`,
+          itemImage: String(order.items?.[0]?.image ?? ''),
+        },
+      });
+    } catch {
+      Alert.alert('Review unavailable', 'We could not open the review page right now.');
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <View style={styles.container}>
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}>
-          <View style={styles.mapHero}>
-            {restaurantCoords && deliveryCoords ? (
-              <Image
-                source={{
-                  uri: buildRouteStaticMapUrl(
-                    restaurantCoords.latitude,
-                    restaurantCoords.longitude,
-                    deliveryCoords.latitude,
-                    deliveryCoords.longitude,
-                    700,
-                    420
-                  ),
-                }}
-                style={styles.mapImage}
-              />
-            ) : (
-              <Image
-                source={{
-                  uri: 'https://api.mapbox.com/styles/v1/mapbox/light-v11/static/121.0437,14.6349,13,0/700x420@2x?access_token=pk.placeholder',
-                }}
-                style={styles.mapImage}
-                defaultSource={{
-                  uri: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==',
-                }}
-              />
-            )}
+          {isCancelledOrder ? (
+            <View style={styles.cancelledHero}>
+              <Pressable
+                style={({ pressed }) => [styles.backButtonInline, pressed && styles.pressed]}
+                onPress={handleBackPress}>
+                <MaterialCommunityIcons name="chevron-left" size={24} color="#1A1A1A" />
+              </Pressable>
 
-            <View style={styles.mapOverlay} />
-
-            <View style={styles.arrivalCard}>
-              <Text style={styles.arrivalOverline}>ARRIVING IN</Text>
-              <Text style={styles.arrivalValue}>{etaText}</Text>
-              <View style={styles.arrivalProgressTrack}>
-                <View
-                  style={[
-                    styles.arrivalProgressFill,
-                    { width: `${deliveryProgress * 100}%` },
-                  ]}
-                />
+              <View style={styles.cancelledIconWrap}>
+                <MaterialCommunityIcons name="close" size={20} color="#FFFFFF" />
               </View>
-              <Text style={styles.arrivalCaption}>
-                {statusIndex >= 4
-                  ? 'Your order has been delivered. Enjoy your meal.'
-                  : 'Your order is being prepared with care.'}
+              <Text style={styles.cancelledHeroTitle}>{`Order #${order.id} was cancelled`}</Text>
+              <Text style={styles.cancelledHeroSubtitle}>
+                This order is no longer being processed. You can still review the order details below.
               </Text>
             </View>
-          </View>
+          ) : (
+            <View style={styles.mapHero}>
+              {restaurantCoords && deliveryCoords ? (
+                <Image
+                  source={{
+                    uri: buildRouteStaticMapUrl(
+                      restaurantCoords.latitude,
+                      restaurantCoords.longitude,
+                      deliveryCoords.latitude,
+                      deliveryCoords.longitude,
+                      700,
+                      420
+                    ),
+                  }}
+                  style={styles.mapImage}
+                />
+              ) : (
+                <Image
+                  source={{
+                    uri: 'https://api.mapbox.com/styles/v1/mapbox/light-v11/static/121.0437,14.6349,13,0/700x420@2x?access_token=pk.placeholder',
+                  }}
+                  style={styles.mapImage}
+                  defaultSource={{
+                    uri: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==',
+                  }}
+                />
+              )}
 
-          <View style={styles.successWrap}>
-            <View style={[styles.successIconWrap, order.status === 'Cancelled' && { backgroundColor: '#AC1D10' }]}>
-              <MaterialCommunityIcons name={order.status === 'Cancelled' ? 'close' : 'check'} size={16} color="#FFFFFF" />
+              <View style={styles.mapOverlay} />
+
+              <Pressable
+                style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
+                onPress={handleBackPress}>
+                <MaterialCommunityIcons name="chevron-left" size={24} color="#1A1A1A" />
+              </Pressable>
+
+              <View style={styles.arrivalCard}>
+                <Text style={styles.arrivalOverline}>ARRIVING IN</Text>
+                <Text style={styles.arrivalValue}>{etaText}</Text>
+                <View style={styles.arrivalProgressTrack}>
+                  <View
+                    style={[
+                      styles.arrivalProgressFill,
+                      { width: `${deliveryProgress * 100}%` },
+                    ]}
+                  />
+                </View>
+                <Text style={styles.arrivalCaption}>
+                  {statusIndex >= 4
+                    ? 'Your order has been delivered. Enjoy your meal.'
+                    : 'Your order is being prepared with care.'}
+                </Text>
+              </View>
             </View>
-            <Text style={styles.successTitle}>{order.status === 'Cancelled' ? `Order #${order.id} was Cancelled` : `Order #${order.id} is on its way!`}</Text>
-            <Text style={styles.successSubtitle}>
-              {order.status === 'Cancelled' ? 'We are sorry this order was cancelled.' : 'Get ready for a curated culinary experience delivered to your doorstep.'}
-            </Text>
-          </View>
+          )}
+
+          {!isCancelledOrder ? (
+            <View style={styles.successWrap}>
+              <View style={styles.successIconWrap}>
+                <MaterialCommunityIcons name="check" size={16} color="#FFFFFF" />
+              </View>
+              <Text style={styles.successTitle}>{`Order #${order.id} is on its way!`}</Text>
+              <Text style={styles.successSubtitle}>
+                Get ready for a curated culinary experience delivered to your doorstep.
+              </Text>
+            </View>
+          ) : null}
 
           <View style={styles.card}>
             <View style={styles.orderCardRow}>
@@ -238,95 +382,126 @@ export default function OrderTrackingScreen() {
             </View>
           </View>
 
-          <View style={styles.card}>
-            <View style={styles.riderRow}>
-              <View style={styles.riderAvatarWrap}>
-                <MaterialCommunityIcons name="account" size={22} color="#3A3A3A" />
-              </View>
-              <View style={styles.riderCopyWrap}>
-                <Text style={styles.riderName}>Ricardo Gomez</Text>
-                <Text style={styles.riderSub}>Your delivery partner</Text>
-              </View>
-
-              <Pressable
-                style={({ pressed }) => [styles.contactButton, pressed && styles.pressed]}
-                onPress={() => Alert.alert('Message rider', 'Messaging is not connected yet.')}>
-                <MaterialCommunityIcons name="message-outline" size={18} color="#666666" />
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.contactButton,
-                  styles.callButton,
-                  pressed && styles.pressed,
-                ]}
-                onPress={() => Alert.alert('Call rider', 'Calling is not connected yet.')}>
-                <MaterialCommunityIcons name="phone-outline" size={18} color="#FFFFFF" />
-              </Pressable>
-            </View>
-          </View>
-
-          <Text style={styles.sectionTitle}>Order Status</Text>
-
-          <View style={styles.timelineCard}>
-            {timelineRows.map((step, index) => {
-              const isCompleted = step.state === 'completed';
-              const isActive = step.state === 'active';
-              
-              let iconName: any = 'clock-outline';
-              let iconColor = '#8E8E8E';
-
-              if (isCompleted) {
-                iconName = 'check-circle';
-                iconColor = '#1B9D4C';
-              } else if (isActive) {
-                if (step.label === 'Delivered') {
-                  iconName = 'check-circle';
-                  iconColor = '#1B9D4C';
-                } else if (step.label === 'Picked Up') {
-                  iconName = 'motorbike';
-                  iconColor = '#AC1D10';
-                } else {
-                  iconName = 'check-circle';
-                  iconColor = '#1B9D4C';
-                }
-              } else {
-                if (step.label === 'Delivered') {
-                  iconName = 'home';
-                }
-              }
-
-              return (
-                <View
-                  key={step.label}
-                  style={[
-                    styles.timelineRow,
-                    index < timelineRows.length - 1 && styles.timelineRowBorder,
-                  ]}>
-                  <View style={styles.timelineLeft}>
-                    <MaterialCommunityIcons name={iconName} size={15} color={iconColor} />
-                    <Text
-                      style={[
-                        styles.timelineLabel,
-                        isActive && styles.timelineLabelActive,
-                        step.state === 'pending' && styles.timelineLabelPending,
-                      ]}>
-                      {step.label}
-                    </Text>
+          {!isCancelledOrder ? (
+            <>
+              <View style={styles.card}>
+                <View style={styles.riderRow}>
+                  <View style={styles.riderAvatarWrap}>
+                    <MaterialCommunityIcons name="account" size={22} color="#3A3A3A" />
+                  </View>
+                  <View style={styles.riderCopyWrap}>
+                    <Text style={styles.riderName}>Ricardo Gomez</Text>
+                    <Text style={styles.riderSub}>Your delivery partner</Text>
                   </View>
 
-                  <Text
-                    style={[
-                      styles.timelineTime,
-                      step.state === 'pending' && styles.timelinePending,
-                    ]}>
-                    {isActive && step.label === 'Picked Up'
-                      ? 'Your rider is on the way'
-                      : step.timestamp}
-                  </Text>
+                  <Pressable
+                    style={({ pressed }) => [styles.contactButton, pressed && styles.pressed]}
+                    onPress={() => Alert.alert('Message rider', 'Messaging is not connected yet.')}>
+                    <MaterialCommunityIcons name="message-outline" size={18} color="#666666" />
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.contactButton,
+                      styles.callButton,
+                      pressed && styles.pressed,
+                    ]}
+                    onPress={() => Alert.alert('Call rider', 'Calling is not connected yet.')}>
+                    <MaterialCommunityIcons name="phone-outline" size={18} color="#FFFFFF" />
+                  </Pressable>
                 </View>
-              );
-            })}
-          </View>
+              </View>
+
+              <Text style={styles.sectionTitle}>Order Status</Text>
+
+              <View style={styles.timelineCard}>
+                {timelineRows.map((step, index) => {
+                  const isCompleted = step.state === 'completed';
+                  const isActive = step.state === 'active';
+                  
+                  let iconName: any = 'clock-outline';
+                  let iconColor = '#8E8E8E';
+
+                  if (isCompleted) {
+                    iconName = 'check-circle';
+                    iconColor = '#1B9D4C';
+                  } else if (isActive) {
+                    if (step.label === 'Delivered') {
+                      iconName = 'check-circle';
+                      iconColor = '#1B9D4C';
+                    } else if (step.label === 'Picked Up') {
+                      iconName = 'motorbike';
+                      iconColor = '#AC1D10';
+                    } else {
+                      iconName = 'check-circle';
+                      iconColor = '#1B9D4C';
+                    }
+                  } else {
+                    if (step.label === 'Delivered') {
+                      iconName = 'home';
+                    }
+                  }
+
+                  return (
+                    <View
+                      key={step.label}
+                      style={[
+                        styles.timelineRow,
+                        index < timelineRows.length - 1 && styles.timelineRowBorder,
+                      ]}>
+                      <View style={styles.timelineLeft}>
+                        <MaterialCommunityIcons name={iconName} size={15} color={iconColor} />
+                        <Text
+                          style={[
+                            styles.timelineLabel,
+                            isActive && styles.timelineLabelActive,
+                            step.state === 'pending' && styles.timelineLabelPending,
+                          ]}>
+                          {step.label}
+                        </Text>
+                      </View>
+
+                      <Text
+                        style={[
+                          styles.timelineTime,
+                          step.state === 'pending' && styles.timelinePending,
+                        ]}>
+                        {isActive && step.label === 'Picked Up'
+                          ? 'Your rider is on the way'
+                          : step.timestamp}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </>
+          ) : (
+            <>
+              <Text style={styles.sectionTitle}>Order Details</Text>
+              <View style={styles.timelineCard}>
+                <View style={[styles.timelineRow, styles.timelineRowBorder]}>
+                  <View style={styles.timelineLeft}>
+                    <MaterialCommunityIcons name="close-circle-outline" size={15} color="#AC1D10" />
+                    <Text style={styles.timelineLabel}>Status</Text>
+                  </View>
+                  <Text style={[styles.timelineTime, styles.cancelledStatusText]}>Cancelled</Text>
+                </View>
+                <View style={[styles.timelineRow, styles.timelineRowBorder]}>
+                  <View style={styles.timelineLeft}>
+                    <MaterialCommunityIcons name="calendar-clock-outline" size={15} color="#8E8E8E" />
+                    <Text style={styles.timelineLabel}>Placed</Text>
+                  </View>
+                  <Text style={styles.timelineTime}>{formatTime(placedAtDate)}</Text>
+                </View>
+                <View style={styles.timelineRow}>
+                  <View style={styles.timelineLeft}>
+                    <MaterialCommunityIcons name="information-outline" size={15} color="#8E8E8E" />
+                    <Text style={styles.timelineLabel}>Update</Text>
+                  </View>
+                  <Text style={styles.timelineTime}>Order was cancelled before fulfillment</Text>
+                </View>
+              </View>
+            </>
+          )}
 
           <View style={styles.paymentCard}>
             <Text style={styles.paymentTitle}>Payment Summary</Text>
@@ -340,10 +515,59 @@ export default function OrderTrackingScreen() {
             </View>
           </View>
 
+          {canLeaveReview ? (
+            <View style={styles.reviewActionsCard}>
+              <View style={styles.reviewActionsCopy}>
+                <Text style={styles.reviewActionsTitle}>
+                  {hasReviewedOrder ? 'Thanks for your feedback' : 'Rate this order'}
+                </Text>
+                <Text style={styles.reviewActionsSubtitle}>
+                  {hasReviewedOrder
+                    ? 'You can revisit your review or jump back to the restaurant any time.'
+                    : 'Share your experience and help other customers choose with confidence.'}
+                </Text>
+              </View>
+
+              <View style={styles.reviewActionsRow}>
+                <Pressable
+                  style={({ pressed }) => [styles.reviewSecondaryButton, pressed && styles.pressed]}
+                  onPress={openRestaurant}>
+                  <Text style={styles.reviewSecondaryButtonText}>View Restaurant</Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [styles.reviewPrimaryButton, pressed && styles.pressed]}
+                  onPress={openReview}>
+                  <Text style={styles.reviewPrimaryButtonText}>
+                    {hasReviewedOrder ? 'View Review' : 'Leave Review'}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
+
           <View style={styles.footerRow}>
             <Text style={styles.footerMuted}>Need help? </Text>
             <Text style={styles.footerLink}>Contact Support</Text>
           </View>
+
+          {canCancelOrder ? (
+            <View style={styles.cancelSection}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.cancelButton,
+                  (pressed || isCancelling) && styles.pressed,
+                ]}
+                disabled={isCancelling}
+                onPress={handleCancelOrder}>
+                <Text style={styles.cancelButtonText}>
+                  {isCancelling ? 'Cancelling...' : 'Cancel Order'}
+                </Text>
+              </Pressable>
+              <Text style={styles.cancelHelperText}>
+                Cancellation is only available before the restaurant confirms your order.
+              </Text>
+            </View>
+          ) : null}
         </ScrollView>
       </View>
 
@@ -412,6 +636,47 @@ export default function OrderTrackingScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        visible={isCancelModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsCancelModalOpen(false)}>
+        <View style={styles.sheetRoot}>
+          <Pressable
+            style={styles.sheetBackdrop}
+            onPress={() => setIsCancelModalOpen(false)}
+          />
+
+          <View style={styles.cancelModalCard}>
+            <Text style={styles.cancelModalTitle}>Cancel order?</Text>
+            <Text style={styles.cancelModalText}>
+              You can only cancel while the restaurant has not confirmed your order yet.
+            </Text>
+            <View style={styles.cancelModalActions}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.cancelModalSecondaryButton,
+                  pressed && styles.pressed,
+                ]}
+                onPress={() => setIsCancelModalOpen(false)}>
+                <Text style={styles.cancelModalSecondaryButtonText}>Keep Order</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.cancelModalPrimaryButton,
+                  (pressed || isCancelling) && styles.pressed,
+                ]}
+                disabled={isCancelling}
+                onPress={confirmCancelOrder}>
+                <Text style={styles.cancelModalPrimaryButtonText}>
+                  {isCancelling ? 'Cancelling...' : 'Cancel Order'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -433,6 +698,48 @@ const styles = StyleSheet.create({
     marginBottom: 58,
     overflow: 'visible',
   },
+  cancelledHero: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
+    alignItems: 'center',
+  },
+  backButtonInline: {
+    alignSelf: 'flex-start',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E4E4E4',
+    marginBottom: 26,
+  },
+  cancelledIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#AC1D10',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelledHeroTitle: {
+    marginTop: 14,
+    textAlign: 'center',
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: '800',
+    color: '#1A1A1A',
+  },
+  cancelledHeroSubtitle: {
+    marginTop: 8,
+    textAlign: 'center',
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#666666',
+    maxWidth: 320,
+  },
   mapImage: {
     width: '100%',
     height: 220,
@@ -442,6 +749,20 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     height: 220,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  backButton: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.96)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E4E4E4',
+    zIndex: 2,
   },
   arrivalCard: {
     position: 'absolute',
@@ -689,6 +1010,10 @@ const styles = StyleSheet.create({
   timelinePending: {
     color: '#A4A4A4',
   },
+  cancelledStatusText: {
+    color: '#AC1D10',
+    fontWeight: '700',
+  },
   paymentCard: {
     marginTop: 12,
     marginHorizontal: 16,
@@ -699,6 +1024,62 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 12,
     gap: 7,
+  },
+  reviewActionsCard: {
+    marginTop: 12,
+    marginHorizontal: 16,
+    borderRadius: 16,
+    backgroundColor: '#FFF7EF',
+    borderWidth: 1,
+    borderColor: '#F4D7B8',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  reviewActionsCopy: {
+    gap: 4,
+  },
+  reviewActionsTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#1A1A1A',
+  },
+  reviewActionsSubtitle: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#7A5A38',
+  },
+  reviewActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  reviewSecondaryButton: {
+    flex: 1,
+    height: 42,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5C8AA',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reviewSecondaryButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#7A4B20',
+  },
+  reviewPrimaryButton: {
+    flex: 1,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#AC1D10',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reviewPrimaryButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   paymentTitle: {
     fontSize: 14,
@@ -739,6 +1120,85 @@ const styles = StyleSheet.create({
     color: '#AC1D10',
     textDecorationLine: 'underline',
     fontWeight: '600',
+  },
+  cancelSection: {
+    marginTop: 18,
+    marginHorizontal: 16,
+    marginBottom: 8,
+  },
+  cancelButton: {
+    height: 46,
+    borderRadius: 12,
+    backgroundColor: '#FFF1F0',
+    borderWidth: 1,
+    borderColor: '#F1C4C0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#AC1D10',
+  },
+  cancelHelperText: {
+    marginTop: 8,
+    textAlign: 'center',
+    fontSize: 12,
+    color: '#7B7B7B',
+    lineHeight: 18,
+  },
+  cancelModalCard: {
+    marginHorizontal: 16,
+    marginBottom: 24,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 16,
+  },
+  cancelModalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#1A1A1A',
+  },
+  cancelModalText: {
+    marginTop: 8,
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#666666',
+  },
+  cancelModalActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 18,
+  },
+  cancelModalSecondaryButton: {
+    flex: 1,
+    height: 44,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F7F7F7',
+  },
+  cancelModalSecondaryButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#3D3D3D',
+  },
+  cancelModalPrimaryButton: {
+    flex: 1,
+    height: 44,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#AC1D10',
+  },
+  cancelModalPrimaryButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   sheetRoot: {
     flex: 1,

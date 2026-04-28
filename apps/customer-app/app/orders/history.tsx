@@ -1,8 +1,9 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { router, Stack } from 'expo-router';
+import { router, Stack, useFocusEffect } from 'expo-router';
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Pressable,
   RefreshControl,
@@ -14,6 +15,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 
 import { apiClient } from '@/src/api/apiClient';
+import { applyLocalOrderStatuses } from '@/src/features/orders/local-order-status';
+import { getReviewedOrder, resolveRestaurantIdForOrder } from '@/src/features/reviews/review-flow';
 
 interface OrderItem {
   id: number;
@@ -40,21 +43,42 @@ export default function OrderHistoryScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('Ongoing');
+  const [reviewedOrderIds, setReviewedOrderIds] = useState<Record<string, boolean>>({});
 
-  const fetchOrders = async () => {
+  const syncReviewedOrders = useCallback((nextOrders: Order[]) => {
+    const nextReviewedMap = nextOrders.reduce<Record<string, boolean>>((accumulator, order) => {
+      accumulator[String(order.id)] = !!getReviewedOrder(order.id);
+      return accumulator;
+    }, {});
+
+    setReviewedOrderIds(nextReviewedMap);
+  }, []);
+
+  const handleBackPress = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace('/(tabs)/profile');
+  };
+
+  const fetchOrders = useCallback(async () => {
     try {
       const response = await apiClient<Order[]>('/orders');
-      setOrders(response || []);
+      const nextOrders = applyLocalOrderStatuses(response || []);
+      setOrders(nextOrders);
+      syncReviewedOrders(nextOrders);
     } catch (error) {
       console.error('Failed to fetch orders:', error);
     }
-  };
+  }, [syncReviewedOrders]);
 
-  const loadInitial = async () => {
+  const loadInitial = useCallback(async () => {
     setIsLoading(true);
     await fetchOrders();
     setIsLoading(false);
-  };
+  }, [fetchOrders]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -64,6 +88,50 @@ export default function OrderHistoryScreen() {
 
   useEffect(() => {
     loadInitial();
+  }, [loadInitial]);
+
+  useFocusEffect(
+    useCallback(() => {
+      syncReviewedOrders(orders);
+    }, [orders, syncReviewedOrders])
+  );
+
+  const handleOpenRestaurant = useCallback(async (order: Order) => {
+    try {
+      const restaurantId = await resolveRestaurantIdForOrder(order as unknown as Record<string, unknown>);
+      if (!restaurantId) {
+        Alert.alert('Restaurant unavailable', 'We could not find this restaurant right now.');
+        return;
+      }
+
+      router.push({ pathname: '/restaurant/[id]', params: { id: restaurantId } });
+    } catch {
+      Alert.alert('Restaurant unavailable', 'We could not open this restaurant right now.');
+    }
+  }, []);
+
+  const handleOpenReview = useCallback(async (order: Order) => {
+    try {
+      const restaurantId = await resolveRestaurantIdForOrder(order as unknown as Record<string, unknown>);
+      if (!restaurantId) {
+        Alert.alert('Review unavailable', 'We could not find the restaurant for this order.');
+        return;
+      }
+
+      router.push({
+        pathname: '/reviews/[id]',
+        params: {
+          id: restaurantId,
+          orderId: String(order.id),
+          storeName: order.store_name,
+          orderCreatedAt: order.created_at,
+          orderNumber: `#${order.id}`,
+          itemImage: order.items[0]?.image ?? '',
+        },
+      });
+    } catch {
+      Alert.alert('Review unavailable', 'We could not open the review page right now.');
+    }
   }, []);
 
   const ongoingOrders = orders.filter((o) => ['Pending', 'Order Confirmed', 'Out for Delivery'].includes(o.status));
@@ -122,9 +190,14 @@ export default function OrderHistoryScreen() {
       : null;
 
     const extraCount = item.items.length > 1 ? item.items.length - 1 : 0;
+    const openOrderDetails = () =>
+      router.push({ pathname: '/order-tracking/[id]', params: { id: item.id } });
+    const hasReviewedOrder = reviewedOrderIds[String(item.id)];
 
     return (
-      <View style={styles.orderCard}>
+      <Pressable
+        style={({ pressed }) => [styles.orderCard, pressed && styles.pressed]}
+        onPress={openOrderDetails}>
         {/* Top Meta Row */}
         <View style={styles.cardHeader}>
           <View>
@@ -183,24 +256,38 @@ export default function OrderHistoryScreen() {
 
           <View style={styles.actionRow}>
             {item.status === 'Delivered' && (
-              <Pressable style={styles.actionBtnYellow}>
+              <Pressable
+                style={styles.actionBtnYellow}
+                onPress={() => handleOpenReview(item)}>
                 <MaterialCommunityIcons name="star-outline" size={14} color="#D97706" style={{ marginRight: 4 }} />
-                <Text style={styles.actionBtnTextYellow}>Leave Review</Text>
+                <Text style={styles.actionBtnTextYellow}>
+                  {hasReviewedOrder ? 'View Review' : 'Leave Review'}
+                </Text>
               </Pressable>
             )}
             {item.status !== 'Delivered' && (
               <Pressable 
                 style={styles.actionBtnGray}
-                onPress={() => router.push({ pathname: '/order-tracking/[id]', params: { id: item.id } })}>
-                <Text style={styles.actionBtnTextGray}>Track Order</Text>
+                onPress={openOrderDetails}>
+                <Text style={styles.actionBtnTextGray}>
+                  {item.status === 'Cancelled' ? 'View Details' : 'Track Order'}
+                </Text>
               </Pressable>
             )}
-            <Pressable style={styles.actionBtnPrimary}>
-              <Text style={styles.actionBtnTextPrimary}>Reorder</Text>
-            </Pressable>
+            {item.status === 'Delivered' ? (
+              <Pressable
+                style={styles.actionBtnPrimary}
+                onPress={() => handleOpenRestaurant(item)}>
+                <Text style={styles.actionBtnTextPrimary}>View Restaurant</Text>
+              </Pressable>
+            ) : (
+              <Pressable style={styles.actionBtnPrimary}>
+                <Text style={styles.actionBtnTextPrimary}>Reorder</Text>
+              </Pressable>
+            )}
           </View>
         </View>
-      </View>
+      </Pressable>
     );
   };
 
@@ -210,7 +297,7 @@ export default function OrderHistoryScreen() {
       <View style={styles.header}>
         <Pressable
           style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
-          onPress={() => router.back()}>
+          onPress={handleBackPress}>
           <MaterialCommunityIcons name="chevron-left" size={26} color="#1A1A1A" />
         </Pressable>
         <View style={styles.headerSpacer} />

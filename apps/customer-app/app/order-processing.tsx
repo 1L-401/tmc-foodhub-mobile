@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Animated,
+  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -12,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useCart } from '@/components/cart';
+import { setLocalOrderStatus } from '@/src/features/orders/local-order-status';
 
 type ProcessingStage = 'contacting-kitchen' | 'kitchen-confirmed' | 'preparing';
 
@@ -55,6 +57,7 @@ export default function OrderProcessingScreen() {
   const params = useLocalSearchParams<{ orderId?: string }>();
   const { activeOrder, clearActiveOrder } = useCart();
   const [stage, setStage] = useState<ProcessingStage>('contacting-kitchen');
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const progressAnim = useRef(new Animated.Value(STAGE_STATES['contacting-kitchen'].progress)).current;
   const timeoutRefOne = useRef<ReturnType<typeof setTimeout> | null>(null);
   const timeoutRefTwo = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -120,6 +123,7 @@ export default function OrderProcessingScreen() {
   }, [progressAnim, stage]);
 
   const stageState = STAGE_STATES[stage];
+  const canCancelOrder = stage === 'contacting-kitchen';
 
   const progressWidth = useMemo(
     () =>
@@ -145,21 +149,25 @@ export default function OrderProcessingScreen() {
   };
 
   const handleCancelOrder = () => {
-    Alert.alert('Cancel order?', 'Are you sure you want to cancel this order while processing?', [
-      {
-        text: 'Keep Order',
-        style: 'cancel',
-      },
-      {
-        text: 'Cancel Order',
-        style: 'destructive',
-        onPress: () => {
-          clearTimers();
-          clearActiveOrder();
-          router.replace('/(tabs)/cart');
-        },
-      },
-    ]);
+    if (!canCancelOrder) {
+      Alert.alert(
+        'Order already confirmed',
+        'This order can only be cancelled before the restaurant confirms it.'
+      );
+      return;
+    }
+
+    setIsCancelModalOpen(true);
+  };
+
+  const confirmCancelOrder = () => {
+    if (resolvedOrderId) {
+      setLocalOrderStatus(resolvedOrderId, 'Cancelled');
+    }
+    setIsCancelModalOpen(false);
+    clearTimers();
+    clearActiveOrder();
+    router.replace('/(tabs)/cart');
   };
 
   if (!resolvedOrderId) {
@@ -216,13 +224,45 @@ export default function OrderProcessingScreen() {
           <Pressable
             style={({ pressed }) => [
               styles.cancelButton,
+              !canCancelOrder && styles.cancelButtonDisabled,
               pressed && styles.cancelPressed,
             ]}
+            disabled={!canCancelOrder}
             onPress={handleCancelOrder}>
-            <Text style={styles.cancelText}>Cancel Order</Text>
+            <Text style={[styles.cancelText, !canCancelOrder && styles.cancelTextDisabled]}>
+              Cancel Order
+            </Text>
           </Pressable>
         </View>
       </View>
+
+      <Modal
+        visible={isCancelModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsCancelModalOpen(false)}>
+        <View style={styles.modalOverlay}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setIsCancelModalOpen(false)} />
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Cancel order?</Text>
+            <Text style={styles.modalText}>
+              Are you sure you want to cancel this order before the restaurant confirms it?
+            </Text>
+            <View style={styles.modalActions}>
+              <Pressable
+                style={({ pressed }) => [styles.modalSecondaryButton, pressed && styles.cancelPressed]}
+                onPress={() => setIsCancelModalOpen(false)}>
+                <Text style={styles.modalSecondaryButtonText}>Keep Order</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.modalPrimaryButton, pressed && styles.cancelPressed]}
+                onPress={confirmCancelOrder}>
+                <Text style={styles.modalPrimaryButtonText}>Cancel Order</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -235,6 +275,66 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'space-between',
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.28)',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  modalCard: {
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#1A1A1A',
+  },
+  modalText: {
+    marginTop: 8,
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#666666',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 18,
+  },
+  modalSecondaryButton: {
+    flex: 1,
+    height: 44,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F7F7F7',
+  },
+  modalSecondaryButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#3D3D3D',
+  },
+  modalPrimaryButton: {
+    flex: 1,
+    height: 44,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#AC1D10',
+  },
+  modalPrimaryButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   contentWrap: {
     alignItems: 'center',
@@ -346,10 +446,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  cancelButtonDisabled: {
+    backgroundColor: '#F1F1F1',
+    borderColor: '#E4E4E4',
+  },
   cancelText: {
     fontSize: 16,
     fontWeight: '500',
     color: '#2A2A2A',
+  },
+  cancelTextDisabled: {
+    color: '#9A9A9A',
   },
   cancelPressed: {
     opacity: 0.78,
