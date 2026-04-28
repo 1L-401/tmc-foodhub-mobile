@@ -1,4 +1,4 @@
-const OWNER_LOGIN_URL = 'https://foodhub.tmc-innovations.com/api/owner/login';
+const OWNER_LOGIN_URL = 'https://foodhub.tmc-innovations.com/api/login';
 
 type ErrorCode = 'NETWORK' | 'SERVER' | 'INVALID_RESPONSE';
 
@@ -139,6 +139,15 @@ function extractUser(payload: unknown): OwnerUser | null {
   return null;
 }
 
+function validatePartnerRole(user: OwnerUser | null): boolean {
+  if (!user) {
+    return false;
+  }
+
+  const role = user.role;
+  return typeof role === 'string' && role.toLowerCase() === 'partner';
+}
+
 async function parseResponseBody(response: Response): Promise<unknown> {
   const contentType = response.headers.get('content-type') ?? '';
 
@@ -206,9 +215,18 @@ export async function loginOwner(payload: OwnerLoginPayload): Promise<OwnerLogin
     );
   }
 
+  const user = extractUser(body);
+
+  if (!validatePartnerRole(user)) {
+    throw new AuthServiceError(
+      'Only partners can access this application.',
+      { status: 403, code: 'SERVER' },
+    );
+  }
+
   return {
     token,
-    user: extractUser(body),
+    user,
     raw: body,
   };
 }
