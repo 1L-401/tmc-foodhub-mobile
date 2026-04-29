@@ -1,9 +1,12 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import {
-  Platform,
+  ActivityIndicator,
+  Alert,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,90 +16,36 @@ import {
 import Animated, { FadeInDown, FadeInRight } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-/* ─── Types ─── */
-type OrderStatus = 'new' | 'preparing' | 'ready';
+import {
+  fetchOwnerOrders,
+  getNextOrderStatus,
+  getOrderActionLabel,
+  getPaymentMethodLabel,
+  ownerOrderQueryKeys,
+  updateOwnerOrderStatus,
+  type OwnerOrder,
+  type OwnerOrderStatus,
+} from '@/services/orderService';
 
-interface Order {
-  id: string;
-  orderNumber: string;
-  customerName: string;
-  items: string;
-  total: number;
-  paymentMethod: string;
-  timeAgo: string;
-  status: OrderStatus;
-}
-
-/* ─── Mock Orders ─── */
-const ORDERS: Order[] = [
-  {
-    id: '1',
-    orderNumber: '#TMC-882041',
-    customerName: 'Jane Doe',
-    items: '2x Classic Burger, 1x Large Fries',
-    total: 24.5,
-    paymentMethod: 'GCash',
-    timeAgo: '2 mins ago',
-    status: 'new',
-  },
-  {
-    id: '2',
-    orderNumber: '#TMC-882042',
-    customerName: 'Michael Smith',
-    items: '1x Pizza Margherita (Large)',
-    total: 18.2,
-    paymentMethod: 'COD',
-    timeAgo: '15 mins ago',
-    status: 'preparing',
-  },
-  {
-    id: '3',
-    orderNumber: '#TMC-882043',
-    customerName: 'Amy Lee',
-    items: '3x Street Tacos, 1x Coke Zero',
-    total: 32.0,
-    paymentMethod: 'COD',
-    timeAgo: 'Just Now',
-    status: 'new',
-  },
-  {
-    id: '4',
-    orderNumber: '#TMC-882044',
-    customerName: 'Robert Brown',
-    items: '1x Veggie Bowl Special',
-    total: 12.5,
-    paymentMethod: 'GCash',
-    timeAgo: '2 mins ago',
-    status: 'ready',
-  },
-  {
-    id: '5',
-    orderNumber: '#TMC-882045',
-    customerName: 'Kevin White',
-    items: '4x Tacos Al Pastor, 1x Horchata',
-    total: 15.75,
-    paymentMethod: 'COD',
-    timeAgo: '15 mins ago',
-    status: 'ready',
-  },
-];
-
-/* ─── Filter Tabs ─── */
-type FilterKey = 'all' | 'new' | 'preparing' | 'ready';
+type FilterKey = 'All' | 'Pending' | 'Order Confirmed' | 'Out for Delivery' | 'Delivered';
 
 const FILTERS: { key: FilterKey; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'new', label: 'New' },
-  { key: 'preparing', label: 'Preparing' },
-  { key: 'ready', label: 'Ready' },
+  { key: 'All', label: 'All' },
+  { key: 'Pending', label: 'Pending' },
+  { key: 'Order Confirmed', label: 'Confirmed' },
+  { key: 'Out for Delivery', label: 'Out for Delivery' },
+  { key: 'Delivered', label: 'Complete' },
 ];
 
-/* ─── Status Badge ─── */
-function StatusBadge({ status }: { status: OrderStatus }) {
+const formatCurrency = (amount: number) => `PHP ${Number(amount || 0).toFixed(2)}`;
+
+function StatusBadge({ status }: { status: OwnerOrderStatus }) {
   const cfg = {
-    new: { bg: '#FEF3C7', text: '#B45309', label: 'New' },
-    preparing: { bg: '#DBEAFE', text: '#1D4ED8', label: 'Preparing' },
-    ready: { bg: '#D1FAE5', text: '#047857', label: 'Ready' },
+    Pending: { bg: '#FEF3C7', text: '#B45309', label: 'Pending' },
+    'Order Confirmed': { bg: '#DBEAFE', text: '#1D4ED8', label: 'Confirmed' },
+    'Out for Delivery': { bg: '#CFFAFE', text: '#0891B2', label: 'Out for Delivery' },
+    Delivered: { bg: '#D1FAE5', text: '#047857', label: 'Delivered' },
+    Cancelled: { bg: '#FEE2E2', text: '#DC2626', label: 'Cancelled' },
   }[status];
 
   return (
@@ -106,98 +55,165 @@ function StatusBadge({ status }: { status: OrderStatus }) {
   );
 }
 
-/* ─── Action Button ─── */
-function ActionButton({ status }: { status: OrderStatus }) {
-  const cfg = {
-    new: { bg: '#AC1D10', text: '#FFF', label: 'Accept' },
-    preparing: { bg: '#1D4ED8', text: '#FFF', label: 'Ready' },
-    ready: { bg: '#E5E7EB', text: '#374151', label: 'Handover' },
-  }[status];
+function ActionButton({
+  status,
+  disabled,
+  onPress,
+}: {
+  status: OwnerOrderStatus;
+  disabled: boolean;
+  onPress: () => void;
+}) {
+  const label = getOrderActionLabel(status);
+
+  if (!label) {
+    return null;
+  }
+
+  const cfgByStatus: Partial<Record<OwnerOrderStatus, { bg: string; text: string }>> = {
+    Pending: { bg: '#AC1D10', text: '#FFF' },
+    'Order Confirmed': { bg: '#1D4ED8', text: '#FFF' },
+    'Out for Delivery': { bg: '#047857', text: '#FFF' },
+  };
+  const cfg = cfgByStatus[status] ?? { bg: '#E5E7EB', text: '#374151' };
 
   return (
     <Pressable
+      disabled={disabled}
+      onPress={(event) => {
+        event.stopPropagation();
+        onPress();
+      }}
       style={({ pressed }) => [
         actionStyles.btn,
         { backgroundColor: cfg.bg },
         pressed && actionStyles.pressed,
+        disabled && actionStyles.disabled,
       ]}>
-      <Text style={[actionStyles.text, { color: cfg.text }]}>{cfg.label}</Text>
+      {disabled ? (
+        <ActivityIndicator size="small" color={cfg.text} />
+      ) : (
+        <Text style={[actionStyles.text, { color: cfg.text }]}>{label}</Text>
+      )}
     </Pressable>
   );
 }
 
-/* ─── Order Card ─── */
-function OrderCard({ order, index }: { order: Order; index: number }) {
+function OrderCard({
+  order,
+  index,
+  isUpdating,
+  onAdvance,
+}: {
+  order: OwnerOrder;
+  index: number;
+  isUpdating: boolean;
+  onAdvance: (order: OwnerOrder) => void;
+}) {
   return (
     <Pressable
       onPress={() =>
-        router.push({ pathname: '/order-details', params: { id: order.id } })
+        router.push({ pathname: '/order-details', params: { id: String(order.id) } })
       }>
       <Animated.View
-        entering={FadeInRight.delay(200 + index * 80).duration(400)}
+        entering={FadeInRight.delay(120 + index * 60).duration(350)}
         style={styles.orderCard}>
-        {/* Top row: order number + badge */}
         <View style={styles.orderTop}>
           <Text style={styles.orderNumber}>{order.orderNumber}</Text>
           <StatusBadge status={order.status} />
         </View>
 
-        {/* Customer */}
         <Text style={styles.orderCustomer}>{order.customerName}</Text>
+        <Text style={styles.orderItems} numberOfLines={2}>
+          {order.itemsSummary}
+        </Text>
+        <Text style={styles.orderTotal}>{formatCurrency(order.total)}</Text>
 
-        {/* Items */}
-        <Text style={styles.orderItems}>{order.items}</Text>
-
-        {/* Price */}
-        <Text style={styles.orderTotal}>${order.total.toFixed(2)}</Text>
-
-        {/* Bottom row: meta + action */}
         <View style={styles.orderBottom}>
           <Text style={styles.orderMeta}>
-            {order.paymentMethod} • {order.timeAgo}
+            {getPaymentMethodLabel(order.paymentMethod)} - {order.timeAgo}
           </Text>
-          <ActionButton status={order.status} />
+          <ActionButton
+            status={order.status}
+            disabled={isUpdating}
+            onPress={() => onAdvance(order)}
+          />
         </View>
       </Animated.View>
     </Pressable>
   );
 }
 
-/* ─── Main Screen ─── */
 export default function OrdersScreen() {
-  const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
+  const queryClient = useQueryClient();
+  const [activeFilter, setActiveFilter] = useState<FilterKey>('All');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Count for badges
-  const newCount = ORDERS.filter((o) => o.status === 'new').length;
+  const ordersQuery = useQuery({
+    queryKey: ownerOrderQueryKeys.all,
+    queryFn: fetchOwnerOrders,
+    refetchInterval: 5000,
+  });
 
-  // Filtered orders
+  const updateStatusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: OwnerOrder['id']; status: OwnerOrderStatus }) =>
+      updateOwnerOrderStatus(id, status),
+    onSuccess: (updatedOrder) => {
+      queryClient.setQueryData<OwnerOrder[]>(ownerOrderQueryKeys.all, (currentOrders) =>
+        currentOrders?.map((order) =>
+          String(order.id) === String(updatedOrder.id) ? updatedOrder : order,
+        ) ?? [updatedOrder],
+      );
+      void queryClient.invalidateQueries({ queryKey: ownerOrderQueryKeys.all });
+    },
+    onError: (error) => {
+      Alert.alert(
+        'Unable to update order',
+        error instanceof Error ? error.message : 'Please try again.',
+      );
+    },
+  });
+
+  const orders = useMemo(() => ordersQuery.data ?? [], [ordersQuery.data]);
+  const pendingCount = orders.filter((order) => order.status === 'Pending').length;
+
   const filteredOrders = useMemo(() => {
-    let result = ORDERS;
+    let result = orders;
 
-    // Filter by status
-    if (activeFilter !== 'all') {
-      result = result.filter((o) => o.status === activeFilter);
+    if (activeFilter !== 'All') {
+      result = result.filter((order) => order.status === activeFilter);
     }
 
-    // Filter by search
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
+    const query = searchQuery.trim().toLowerCase();
+    if (query) {
       result = result.filter(
-        (o) =>
-          o.orderNumber.toLowerCase().includes(q) ||
-          o.customerName.toLowerCase().includes(q) ||
-          o.items.toLowerCase().includes(q),
+        (order) =>
+          order.orderNumber.toLowerCase().includes(query) ||
+          order.customerName.toLowerCase().includes(query) ||
+          order.itemsSummary.toLowerCase().includes(query),
       );
     }
 
     return result;
-  }, [activeFilter, searchQuery]);
+  }, [activeFilter, orders, searchQuery]);
+
+  const handleAdvanceOrder = (order: OwnerOrder) => {
+    const nextStatus = getNextOrderStatus(order.status);
+
+    if (!nextStatus) {
+      return;
+    }
+
+    updateStatusMutation.mutate({ id: order.id, status: nextStatus });
+  };
+
+  const refreshing = ordersQuery.isRefetching && !ordersQuery.isLoading;
+  const activeUpdatingOrderId = updateStatusMutation.variables?.id;
+  const hasInitialError = ordersQuery.isError && orders.length === 0;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.container}>
-        {/* ── Top Bar ── */}
         <Animated.View
           entering={FadeInDown.delay(50).duration(400)}
           style={styles.topBar}>
@@ -228,14 +244,13 @@ export default function OrdersScreen() {
           </View>
         </Animated.View>
 
-        {/* ── Search ── */}
         <Animated.View
           entering={FadeInDown.delay(100).duration(400)}
           style={styles.searchWrap}>
           <MaterialCommunityIcons name="magnify" size={18} color="#AAA" />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search orders, menu..."
+            placeholder="Search orders, customer, items..."
             placeholderTextColor="#AAA"
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -244,8 +259,16 @@ export default function OrdersScreen() {
 
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}>
-          {/* ── Title ── */}
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              tintColor="#AC1D10"
+              onRefresh={() => {
+                void ordersQuery.refetch();
+              }}
+            />
+          }>
           <Animated.View entering={FadeInDown.delay(150).duration(400)}>
             <Text style={styles.pageTitle}>Order Management</Text>
             <Text style={styles.pageSubtitle}>
@@ -254,51 +277,92 @@ export default function OrdersScreen() {
             </Text>
           </Animated.View>
 
-          {/* ── Filter Tabs ── */}
-          <Animated.View
-            entering={FadeInDown.delay(200).duration(400)}
-            style={styles.filterRow}>
-            {FILTERS.map((f) => {
-              const isActive = activeFilter === f.key;
-              return (
-                <Pressable
-                  key={f.key}
-                  onPress={() => setActiveFilter(f.key)}
-                  style={[
-                    styles.filterTab,
-                    isActive && styles.filterTabActive,
-                  ]}>
-                  <Text
+          <Animated.View entering={FadeInDown.delay(200).duration(400)}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterRow}>
+              {FILTERS.map((filter) => {
+                const isActive = activeFilter === filter.key;
+                const showBadge = filter.key === 'Pending' && pendingCount > 0;
+
+                return (
+                  <Pressable
+                    key={filter.key}
+                    onPress={() => setActiveFilter(filter.key)}
                     style={[
-                      styles.filterText,
-                      isActive && styles.filterTextActive,
+                      styles.filterTab,
+                      isActive && styles.filterTabActive,
                     ]}>
-                    {f.label}
-                  </Text>
-                  {f.key === 'new' && newCount > 0 && (
-                    <View
+                    <Text
                       style={[
-                        styles.filterBadge,
-                        isActive && styles.filterBadgeActive,
+                        styles.filterText,
+                        isActive && styles.filterTextActive,
                       ]}>
-                      <Text
+                      {filter.label}
+                    </Text>
+                    {showBadge && (
+                      <View
                         style={[
-                          styles.filterBadgeText,
-                          isActive && styles.filterBadgeTextActive,
+                          styles.filterBadge,
+                          isActive && styles.filterBadgeActive,
                         ]}>
-                        {newCount}
-                      </Text>
-                    </View>
-                  )}
-                </Pressable>
-              );
-            })}
+                        <Text
+                          style={[
+                            styles.filterBadgeText,
+                            isActive && styles.filterBadgeTextActive,
+                          ]}>
+                          {pendingCount}
+                        </Text>
+                      </View>
+                    )}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
           </Animated.View>
 
-          {/* ── Order Cards ── */}
-          {filteredOrders.length > 0 ? (
-            filteredOrders.map((order, i) => (
-              <OrderCard key={order.id} order={order} index={i} />
+          {ordersQuery.isLoading ? (
+            <View style={styles.stateContainer}>
+              <ActivityIndicator size="large" color="#AC1D10" />
+              <Text style={styles.stateText}>Fetching your orders...</Text>
+            </View>
+          ) : hasInitialError ? (
+            <View style={styles.stateContainer}>
+              <MaterialCommunityIcons
+                name="alert-circle-outline"
+                size={48}
+                color="#CCC"
+              />
+              <Text style={styles.emptyTitle}>Unable to load orders</Text>
+              <Text style={styles.emptySubtitle}>
+                {ordersQuery.error instanceof Error
+                  ? ordersQuery.error.message
+                  : 'Please check your connection and try again.'}
+              </Text>
+              <Pressable
+                onPress={() => {
+                  void ordersQuery.refetch();
+                }}
+                style={({ pressed }) => [
+                  styles.retryBtn,
+                  pressed && styles.pressed,
+                ]}>
+                <Text style={styles.retryText}>Retry</Text>
+              </Pressable>
+            </View>
+          ) : filteredOrders.length > 0 ? (
+            filteredOrders.map((order, index) => (
+              <OrderCard
+                key={order.id}
+                order={order}
+                index={index}
+                isUpdating={
+                  updateStatusMutation.isPending &&
+                  String(activeUpdatingOrderId) === String(order.id)
+                }
+                onAdvance={handleAdvanceOrder}
+              />
             ))
           ) : (
             <Animated.View
@@ -318,7 +382,6 @@ export default function OrdersScreen() {
             </Animated.View>
           )}
 
-          {/* Bottom spacer for tab bar */}
           <View style={{ height: 100 }} />
         </ScrollView>
       </View>
@@ -326,13 +389,11 @@ export default function OrdersScreen() {
   );
 }
 
-/* ─── Styles ─── */
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#F8F8F8' },
   container: { flex: 1 },
   pressed: { opacity: 0.7 },
 
-  /* Top Bar */
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -367,7 +428,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  /* Search */
   searchWrap: {
     marginHorizontal: 16,
     marginBottom: 12,
@@ -385,7 +445,6 @@ const styles = StyleSheet.create({
 
   scrollContent: { paddingHorizontal: 16 },
 
-  /* Page Header */
   pageTitle: {
     fontSize: 20,
     fontWeight: '800',
@@ -399,11 +458,10 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 
-  /* Filter Tabs */
   filterRow: {
     flexDirection: 'row',
     gap: 8,
-    marginBottom: 16,
+    paddingBottom: 16,
   },
   filterTab: {
     flexDirection: 'row',
@@ -449,7 +507,6 @@ const styles = StyleSheet.create({
     color: '#1A1A1A',
   },
 
-  /* Order Card */
   orderCard: {
     backgroundColor: '#FFF',
     borderRadius: 14,
@@ -462,11 +519,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 12,
     marginBottom: 2,
   },
   orderNumber: { fontSize: 15, fontWeight: '700', color: '#1A1A1A' },
   orderCustomer: { fontSize: 12, color: '#888', marginBottom: 6 },
-  orderItems: { fontSize: 13, color: '#555', marginBottom: 4 },
+  orderItems: { fontSize: 13, color: '#555', marginBottom: 4, lineHeight: 18 },
   orderTotal: {
     fontSize: 16,
     fontWeight: '800',
@@ -477,10 +535,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 12,
   },
-  orderMeta: { fontSize: 11, color: '#AAA' },
+  orderMeta: { flex: 1, fontSize: 11, color: '#AAA' },
 
-  /* Empty State */
+  stateContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 56,
+    gap: 10,
+  },
+  stateText: { fontSize: 13, color: '#888', fontWeight: '600' },
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -491,11 +556,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#999',
+    textAlign: 'center',
   },
   emptySubtitle: {
     fontSize: 13,
     color: '#BBB',
+    textAlign: 'center',
+    lineHeight: 18,
   },
+  retryBtn: {
+    marginTop: 6,
+    borderRadius: 10,
+    backgroundColor: '#AC1D10',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  retryText: { color: '#FFF', fontSize: 13, fontWeight: '700' },
 });
 
 const badgeStyles = StyleSheet.create({
@@ -504,7 +580,16 @@ const badgeStyles = StyleSheet.create({
 });
 
 const actionStyles = StyleSheet.create({
-  btn: { borderRadius: 8, paddingHorizontal: 14, paddingVertical: 6 },
+  btn: {
+    minWidth: 72,
+    minHeight: 30,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   text: { fontSize: 12, fontWeight: '700' },
   pressed: { opacity: 0.8 },
+  disabled: { opacity: 0.7 },
 });

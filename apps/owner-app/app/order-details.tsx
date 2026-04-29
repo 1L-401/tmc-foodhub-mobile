@@ -1,8 +1,11 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
-  Platform,
+  ActivityIndicator,
+  Alert,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,153 +15,70 @@ import {
 import Animated, { FadeInDown, FadeInRight } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-/* ─── Types ─── */
-type OrderStatus = 'new' | 'preparing' | 'ready';
+import {
+  ORDER_STATUS_FLOW,
+  confirmOwnerOrderPayment,
+  fetchOwnerOrders,
+  getNextOrderStatus,
+  getOrderDetailActionLabel,
+  getPaymentMethodLabel,
+  getPaymentStatusLabel,
+  isOnlinePayment,
+  ownerOrderQueryKeys,
+  updateOwnerOrderStatus,
+  type OwnerOrder,
+  type OwnerOrderItem,
+  type OwnerOrderStatus,
+  type OwnerPaymentStatus,
+} from '@/services/orderService';
 
-interface OrderItem {
-  name: string;
-  qty: number;
-  price: number;
-  notes?: string;
-}
+const formatCurrency = (amount: number) => `PHP ${Number(amount || 0).toFixed(2)}`;
 
-interface OrderDetail {
-  id: string;
-  orderNumber: string;
-  customerName: string;
-  customerPhone: string;
-  customerAddress: string;
-  items: OrderItem[];
-  subtotal: number;
-  deliveryFee: number;
-  discount: number;
-  total: number;
-  paymentMethod: string;
-  paymentStatus: 'paid' | 'unpaid';
-  timeAgo: string;
-  placedAt: string;
-  status: OrderStatus;
-  deliveryType: 'delivery' | 'pickup';
-  specialInstructions?: string;
-}
+const formatDateTime = (value: string) => {
+  const date = new Date(value);
 
-/* ─── Mock Order Details ─── */
-const ORDER_DETAILS: Record<string, OrderDetail> = {
-  '1': {
-    id: '1',
-    orderNumber: '#TMC-882041',
-    customerName: 'Jane Doe',
-    customerPhone: '+63 912 345 6789',
-    customerAddress: '123 Session Rd, Baguio City',
-    items: [
-      { name: 'Classic Burger', qty: 2, price: 8.50, notes: 'No onions' },
-      { name: 'Large Fries', qty: 1, price: 4.50 },
-      { name: 'Iced Tea (Regular)', qty: 2, price: 1.50 },
-    ],
-    subtotal: 24.50,
-    deliveryFee: 3.00,
-    discount: 3.00,
-    total: 24.50,
-    paymentMethod: 'GCash',
-    paymentStatus: 'paid',
-    timeAgo: '2 mins ago',
-    placedAt: 'Apr 14, 2026 — 4:32 PM',
-    status: 'new',
-    deliveryType: 'delivery',
-    specialInstructions: 'Please ring the doorbell twice. Gate code: 1234',
-  },
-  '2': {
-    id: '2',
-    orderNumber: '#TMC-882042',
-    customerName: 'Michael Smith',
-    customerPhone: '+63 917 654 3210',
-    customerAddress: '45 Abanao St, Baguio City',
-    items: [
-      { name: 'Pizza Margherita (Large)', qty: 1, price: 18.20 },
-    ],
-    subtotal: 18.20,
-    deliveryFee: 2.50,
-    discount: 2.50,
-    total: 18.20,
-    paymentMethod: 'COD',
-    paymentStatus: 'unpaid',
-    timeAgo: '15 mins ago',
-    placedAt: 'Apr 14, 2026 — 4:17 PM',
-    status: 'preparing',
-    deliveryType: 'pickup',
-  },
-  '3': {
-    id: '3',
-    orderNumber: '#TMC-882043',
-    customerName: 'Amy Lee',
-    customerPhone: '+63 918 111 2222',
-    customerAddress: '88 Burnham Park, Baguio City',
-    items: [
-      { name: 'Street Tacos', qty: 3, price: 6.00 },
-      { name: 'Coke Zero', qty: 1, price: 2.50 },
-      { name: 'Churros', qty: 1, price: 5.50 },
-    ],
-    subtotal: 26.50,
-    deliveryFee: 3.00,
-    discount: 0,
-    total: 29.50,
-    paymentMethod: 'COD',
-    paymentStatus: 'unpaid',
-    timeAgo: 'Just Now',
-    placedAt: 'Apr 14, 2026 — 4:50 PM',
-    status: 'new',
-    deliveryType: 'delivery',
-    specialInstructions: 'Extra salsa on the side please',
-  },
-  '4': {
-    id: '4',
-    orderNumber: '#TMC-882044',
-    customerName: 'Robert Brown',
-    customerPhone: '+63 920 333 4444',
-    customerAddress: '12 Camp John Hay, Baguio City',
-    items: [
-      { name: 'Veggie Bowl Special', qty: 1, price: 12.50 },
-    ],
-    subtotal: 12.50,
-    deliveryFee: 2.00,
-    discount: 2.00,
-    total: 12.50,
-    paymentMethod: 'GCash',
-    paymentStatus: 'paid',
-    timeAgo: '2 mins ago',
-    placedAt: 'Apr 14, 2026 — 4:48 PM',
-    status: 'ready',
-    deliveryType: 'pickup',
-  },
-  '5': {
-    id: '5',
-    orderNumber: '#TMC-882045',
-    customerName: 'Kevin White',
-    customerPhone: '+63 921 555 6666',
-    customerAddress: '77 Leonard Wood Rd, Baguio City',
-    items: [
-      { name: 'Tacos Al Pastor', qty: 4, price: 3.00 },
-      { name: 'Horchata', qty: 1, price: 3.75 },
-    ],
-    subtotal: 15.75,
-    deliveryFee: 2.50,
-    discount: 2.50,
-    total: 15.75,
-    paymentMethod: 'COD',
-    paymentStatus: 'unpaid',
-    timeAgo: '15 mins ago',
-    placedAt: 'Apr 14, 2026 — 4:35 PM',
-    status: 'ready',
-    deliveryType: 'delivery',
-  },
+  if (Number.isNaN(date.getTime())) {
+    return 'N/A';
+  }
+
+  return date.toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 };
 
-/* ─── Status Badge ─── */
-function StatusBadge({ status }: { status: OrderStatus }) {
+const getDeliveryTypeLabel = (order: OwnerOrder) => {
+  if (order.deliveryType !== 'scheduled') {
+    return 'ASAP Delivery';
+  }
+
+  return [order.scheduledDate, order.scheduledTime].filter(Boolean).join(' ') || 'Scheduled';
+};
+
+const getItemVariationText = (item: OwnerOrderItem) => {
+  const parts: string[] = [];
+
+  if (item.variations?.name) {
+    parts.push(`Variant: ${item.variations.name}`);
+  }
+
+  if (item.variations?.addOns?.length) {
+    parts.push(`Add-ons: ${item.variations.addOns.map((addOn) => addOn.name).join(', ')}`);
+  }
+
+  return parts.join(' - ');
+};
+
+function StatusBadge({ status }: { status: OwnerOrderStatus }) {
   const cfg = {
-    new: { bg: '#FEF3C7', text: '#B45309', label: '● New Order' },
-    preparing: { bg: '#DBEAFE', text: '#1D4ED8', label: '● Preparing' },
-    ready: { bg: '#D1FAE5', text: '#047857', label: '● Ready' },
+    Pending: { bg: '#FEF3C7', text: '#B45309', label: 'Pending' },
+    'Order Confirmed': { bg: '#DBEAFE', text: '#1D4ED8', label: 'Confirmed' },
+    'Out for Delivery': { bg: '#CFFAFE', text: '#0891B2', label: 'Out for Delivery' },
+    Delivered: { bg: '#D1FAE5', text: '#047857', label: 'Delivered' },
+    Cancelled: { bg: '#FEE2E2', text: '#DC2626', label: 'Cancelled' },
   }[status];
 
   return (
@@ -168,27 +88,22 @@ function StatusBadge({ status }: { status: OrderStatus }) {
   );
 }
 
-/* ─── Payment Badge ─── */
-function PaymentBadge({ status }: { status: 'paid' | 'unpaid' }) {
-  const isPaid = status === 'paid';
+function PaymentBadge({ status }: { status: OwnerPaymentStatus }) {
+  const cfg = {
+    paid: { bg: '#D1FAE5', text: '#047857', label: 'Confirmed' },
+    rejected: { bg: '#FEE2E2', text: '#DC2626', label: 'Rejected' },
+    awaiting_confirmation: { bg: '#FEF3C7', text: '#B45309', label: 'Awaiting' },
+    pending_verification: { bg: '#FEF3C7', text: '#B45309', label: 'Pending' },
+    unpaid: { bg: '#F3F4F6', text: '#6B7280', label: 'Unpaid' },
+  }[status];
+
   return (
-    <View
-      style={[
-        badgeStyles.badge,
-        { backgroundColor: isPaid ? '#D1FAE5' : '#FEF3C7' },
-      ]}>
-      <Text
-        style={[
-          badgeStyles.text,
-          { color: isPaid ? '#047857' : '#B45309' },
-        ]}>
-        {isPaid ? '✓ Paid' : '○ Unpaid'}
-      </Text>
+    <View style={[badgeStyles.badge, { backgroundColor: cfg.bg }]}>
+      <Text style={[badgeStyles.text, { color: cfg.text }]}>{cfg.label}</Text>
     </View>
   );
 }
 
-/* ─── Timeline Step ─── */
 function TimelineStep({
   icon,
   title,
@@ -209,7 +124,6 @@ function TimelineStep({
 
   return (
     <View style={timelineStyles.step}>
-      {/* Dot + Line */}
       <View style={timelineStyles.dotCol}>
         <View
           style={[
@@ -228,7 +142,6 @@ function TimelineStep({
         )}
       </View>
 
-      {/* Content */}
       <View style={timelineStyles.content}>
         <Text
           style={[
@@ -243,10 +156,23 @@ function TimelineStep({
   );
 }
 
-/* ─── Order Timeline ─── */
-function OrderTimeline({ status }: { status: OrderStatus }) {
-  const statusIndex = { new: 0, preparing: 1, ready: 2 }[status];
+function OrderTimeline({ status }: { status: OwnerOrderStatus }) {
+  if (status === 'Cancelled') {
+    return (
+      <View style={timelineStyles.container}>
+        <TimelineStep
+          icon="close-circle-outline"
+          title="Cancelled"
+          subtitle="This order was cancelled"
+          isActive
+          isCompleted={false}
+          isLast
+        />
+      </View>
+    );
+  }
 
+  const statusIndex = ORDER_STATUS_FLOW.indexOf(status);
   const steps = [
     {
       icon: 'bell-outline',
@@ -254,45 +180,47 @@ function OrderTimeline({ status }: { status: OrderStatus }) {
       subtitle: 'Customer submitted the order',
     },
     {
-      icon: 'chef-hat',
-      title: 'Preparing',
-      subtitle: 'Kitchen is working on it',
+      icon: 'check-circle-outline',
+      title: 'Confirmed',
+      subtitle: 'Restaurant accepted the order',
     },
     {
-      icon: 'check-circle-outline',
-      title: 'Ready',
-      subtitle: 'Ready for pickup / delivery',
+      icon: 'truck-delivery-outline',
+      title: 'Out for Delivery',
+      subtitle: 'Order is on the way',
+    },
+    {
+      icon: 'check-decagram-outline',
+      title: 'Delivered',
+      subtitle: 'Order has been completed',
     },
   ];
 
   return (
     <View style={timelineStyles.container}>
-      {steps.map((step, i) => (
+      {steps.map((step, index) => (
         <TimelineStep
           key={step.title}
           icon={step.icon}
           title={step.title}
           subtitle={step.subtitle}
-          isActive={i === statusIndex}
-          isCompleted={i < statusIndex}
-          isLast={i === steps.length - 1}
+          isActive={index === statusIndex}
+          isCompleted={index < statusIndex}
+          isLast={index === steps.length - 1}
         />
       ))}
     </View>
   );
 }
 
-/* ─── Info Row Helper ─── */
 function InfoRow({
   icon,
   label,
   value,
-  valueColor,
 }: {
   icon: string;
   label: string;
   value: string;
-  valueColor?: string;
 }) {
   return (
     <View style={infoStyles.row}>
@@ -304,88 +232,255 @@ function InfoRow({
         />
       </View>
       <Text style={infoStyles.label}>{label}</Text>
-      <Text style={[infoStyles.value, valueColor ? { color: valueColor } : undefined]}>
-        {value}
-      </Text>
+      <Text style={infoStyles.value}>{value}</Text>
     </View>
   );
 }
 
-/* ─── Action Button ─── */
-function OrderActionButton({ status }: { status: OrderStatus }) {
-  const cfg = {
-    new: {
+function OrderActionButton({
+  status,
+  isLoading,
+  onPress,
+}: {
+  status: OwnerOrderStatus;
+  isLoading: boolean;
+  onPress: () => void;
+}) {
+  const label = getOrderDetailActionLabel(status);
+
+  if (!label) {
+    return null;
+  }
+
+  const cfgByStatus: Partial<Record<OwnerOrderStatus, { bg: string; text: string; icon: string }>> = {
+    Pending: {
       bg: '#AC1D10',
       text: '#FFF',
-      label: 'Accept Order',
       icon: 'check-circle-outline',
     },
-    preparing: {
+    'Order Confirmed': {
       bg: '#1D4ED8',
       text: '#FFF',
-      label: 'Mark as Ready',
-      icon: 'silverware-fork-knife',
+      icon: 'truck-delivery-outline',
     },
-    ready: {
+    'Out for Delivery': {
       bg: '#047857',
       text: '#FFF',
-      label: 'Complete Handover',
-      icon: 'hand-extended-outline',
+      icon: 'check-decagram-outline',
     },
-  }[status];
+  };
+  const cfg = cfgByStatus[status] ?? {
+    bg: '#E5E7EB',
+    text: '#374151',
+    icon: 'check-circle-outline',
+  };
 
   return (
     <Pressable
+      disabled={isLoading}
+      onPress={onPress}
       style={({ pressed }) => [
         actionBtnStyles.primary,
         { backgroundColor: cfg.bg },
         pressed && actionBtnStyles.pressed,
+        isLoading && actionBtnStyles.disabled,
       ]}>
-      <MaterialCommunityIcons
-        name={cfg.icon as any}
-        size={18}
-        color={cfg.text}
-      />
-      <Text style={[actionBtnStyles.primaryText, { color: cfg.text }]}>
-        {cfg.label}
-      </Text>
+      {isLoading ? (
+        <ActivityIndicator size="small" color={cfg.text} />
+      ) : (
+        <>
+          <MaterialCommunityIcons
+            name={cfg.icon as any}
+            size={18}
+            color={cfg.text}
+          />
+          <Text style={[actionBtnStyles.primaryText, { color: cfg.text }]}>
+            {label}
+          </Text>
+        </>
+      )}
     </Pressable>
   );
 }
 
-/* ─── Main Screen ─── */
-export default function OrderDetailsScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-
-  const order = ORDER_DETAILS[id ?? '1'];
-
-  if (!order) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.centered}>
+function CenterState({
+  icon,
+  title,
+  subtitle,
+  actionLabel,
+  onAction,
+  isLoading,
+}: {
+  icon: string;
+  title: string;
+  subtitle?: string;
+  actionLabel?: string;
+  onAction?: () => void;
+  isLoading?: boolean;
+}) {
+  return (
+    <SafeAreaView style={styles.safe}>
+      <View style={styles.centered}>
+        {isLoading ? (
+          <ActivityIndicator size="large" color="#AC1D10" />
+        ) : (
           <MaterialCommunityIcons
-            name="alert-circle-outline"
+            name={icon as any}
             size={48}
             color="#CCC"
           />
-          <Text style={styles.notFoundText}>Order not found</Text>
+        )}
+        <Text style={styles.notFoundText}>{title}</Text>
+        {subtitle ? <Text style={styles.centerSubtitle}>{subtitle}</Text> : null}
+        {actionLabel && onAction ? (
           <Pressable
-            onPress={() => router.back()}
+            onPress={onAction}
             style={({ pressed }) => [
               styles.backBtn,
               pressed && { opacity: 0.7 },
             ]}>
-            <Text style={styles.backBtnText}>Go Back</Text>
+            <Text style={styles.backBtnText}>{actionLabel}</Text>
           </Pressable>
-        </View>
-      </SafeAreaView>
+        ) : null}
+      </View>
+    </SafeAreaView>
+  );
+}
+
+export default function OrderDetailsScreen() {
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const queryClient = useQueryClient();
+  const orderId = typeof id === 'string' ? id : '';
+
+  const ordersQuery = useQuery({
+    queryKey: ownerOrderQueryKeys.all,
+    queryFn: fetchOwnerOrders,
+    refetchInterval: 5000,
+  });
+
+  const orders = useMemo(() => ordersQuery.data ?? [], [ordersQuery.data]);
+  const order = useMemo(
+    () => orders.find((candidate) => String(candidate.id) === String(orderId)),
+    [orderId, orders],
+  );
+
+  const replaceCachedOrder = (updatedOrder: OwnerOrder) => {
+    queryClient.setQueryData<OwnerOrder[]>(ownerOrderQueryKeys.all, (currentOrders) =>
+      currentOrders?.map((candidate) =>
+        String(candidate.id) === String(updatedOrder.id) ? updatedOrder : candidate,
+      ) ?? [updatedOrder],
+    );
+  };
+
+  const updateStatusMutation = useMutation({
+    mutationFn: ({ status }: { status: OwnerOrderStatus }) => {
+      if (!order) {
+        throw new Error('Order not found.');
+      }
+
+      return updateOwnerOrderStatus(order.id, status);
+    },
+    onSuccess: (updatedOrder) => {
+      replaceCachedOrder(updatedOrder);
+      void queryClient.invalidateQueries({ queryKey: ownerOrderQueryKeys.all });
+    },
+    onError: (error) => {
+      Alert.alert(
+        'Unable to update order',
+        error instanceof Error ? error.message : 'Please try again.',
+      );
+    },
+  });
+
+  const paymentMutation = useMutation({
+    mutationFn: ({ action }: { action: 'confirm' | 'reject' }) => {
+      if (!order) {
+        throw new Error('Order not found.');
+      }
+
+      return confirmOwnerOrderPayment(order.id, action);
+    },
+    onSuccess: (result) => {
+      if (order) {
+        replaceCachedOrder({ ...order, paymentStatus: result.payment_status });
+      }
+      void queryClient.invalidateQueries({ queryKey: ownerOrderQueryKeys.all });
+    },
+    onError: (error) => {
+      Alert.alert(
+        'Unable to update payment',
+        error instanceof Error ? error.message : 'Please try again.',
+      );
+    },
+  });
+
+  if (ordersQuery.isLoading) {
+    return (
+      <CenterState
+        icon="clipboard-text-search-outline"
+        title="Loading order..."
+        isLoading
+      />
     );
   }
+
+  if (ordersQuery.isError && !order) {
+    return (
+      <CenterState
+        icon="alert-circle-outline"
+        title="Unable to load order"
+        subtitle={
+          ordersQuery.error instanceof Error
+            ? ordersQuery.error.message
+            : 'Please check your connection and try again.'
+        }
+        actionLabel="Retry"
+        onAction={() => {
+          void ordersQuery.refetch();
+        }}
+      />
+    );
+  }
+
+  if (!order) {
+    return (
+      <CenterState
+        icon="alert-circle-outline"
+        title="Order not found"
+        actionLabel="Go Back"
+        onAction={() => router.back()}
+      />
+    );
+  }
+
+  const nextStatus = getNextOrderStatus(order.status);
+  const isStatusUpdating = updateStatusMutation.isPending;
+  const isPaymentUpdating = paymentMutation.isPending;
+  const hasOnlinePayment = isOnlinePayment(order.paymentMethod);
+  const canReviewPayment =
+    hasOnlinePayment &&
+    Boolean(order.paymentReceipt) &&
+    order.paymentStatus !== 'paid' &&
+    order.paymentStatus !== 'rejected';
+
+  const handleStatusChange = (status: OwnerOrderStatus) => {
+    updateStatusMutation.mutate({ status });
+  };
+
+  const handleDecline = () => {
+    Alert.alert('Decline order?', 'This will cancel the order and notify the customer.', [
+      { text: 'Keep Order', style: 'cancel' },
+      {
+        text: 'Decline',
+        style: 'destructive',
+        onPress: () => handleStatusChange('Cancelled'),
+      },
+    ]);
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.container}>
-        {/* ── Header ── */}
         <Animated.View
           entering={FadeInDown.delay(50).duration(350)}
           style={styles.header}>
@@ -408,13 +503,16 @@ export default function OrderDetailsScreen() {
           </View>
 
           <Pressable
+            onPress={() => {
+              void ordersQuery.refetch();
+            }}
             style={({ pressed }) => [
               styles.headerBtn,
               pressed && { opacity: 0.6 },
             ]}>
             <MaterialCommunityIcons
-              name="dots-vertical"
-              size={22}
+              name="refresh"
+              size={20}
               color="#1A1A1A"
             />
           </Pressable>
@@ -423,23 +521,20 @@ export default function OrderDetailsScreen() {
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}>
-          {/* ── Status Card ── */}
           <Animated.View
             entering={FadeInDown.delay(100).duration(400)}
             style={styles.statusCard}>
             <View style={styles.statusTop}>
-              <View>
+              <View style={styles.statusTitleWrap}>
                 <Text style={styles.orderNum}>{order.orderNumber}</Text>
-                <Text style={styles.orderDate}>{order.placedAt}</Text>
+                <Text style={styles.orderDate}>{formatDateTime(order.placedAt)}</Text>
               </View>
               <StatusBadge status={order.status} />
             </View>
 
-            {/* Timeline */}
             <OrderTimeline status={order.status} />
           </Animated.View>
 
-          {/* ── Customer Info ── */}
           <Animated.View
             entering={FadeInDown.delay(200).duration(400)}
             style={styles.card}>
@@ -452,33 +547,12 @@ export default function OrderDetailsScreen() {
               <Text style={styles.cardTitle}>Customer Information</Text>
             </View>
 
-            <InfoRow
-              icon="account"
-              label="Name"
-              value={order.customerName}
-            />
-            <InfoRow
-              icon="phone-outline"
-              label="Phone"
-              value={order.customerPhone}
-            />
-            <InfoRow
-              icon={order.deliveryType === 'delivery' ? 'map-marker-outline' : 'store-outline'}
-              label={order.deliveryType === 'delivery' ? 'Address' : 'Pickup'}
-              value={
-                order.deliveryType === 'delivery'
-                  ? order.customerAddress
-                  : 'Store Pickup'
-              }
-            />
-            <InfoRow
-              icon="truck-delivery-outline"
-              label="Type"
-              value={order.deliveryType === 'delivery' ? 'Delivery' : 'Pickup'}
-            />
+            <InfoRow icon="account" label="Name" value={order.customerName} />
+            <InfoRow icon="phone-outline" label="Phone" value={order.customerPhone} />
+            <InfoRow icon="map-marker-outline" label="Address" value={order.deliveryAddress} />
+            <InfoRow icon="truck-delivery-outline" label="Type" value={getDeliveryTypeLabel(order)} />
           </Animated.View>
 
-          {/* ── Order Items ── */}
           <Animated.View
             entering={FadeInDown.delay(300).duration(400)}
             style={styles.card}>
@@ -489,35 +563,38 @@ export default function OrderDetailsScreen() {
                 color="#AC1D10"
               />
               <Text style={styles.cardTitle}>
-                Order Items ({order.items.length})
+                Order Items ({order.items.reduce((sum, item) => sum + item.quantity, 0)})
               </Text>
             </View>
 
-            {order.items.map((item, i) => (
-              <Animated.View
-                key={`${item.name}-${i}`}
-                entering={FadeInRight.delay(350 + i * 60).duration(350)}
-                style={[
-                  itemStyles.row,
-                  i < order.items.length - 1 && itemStyles.rowBorder,
-                ]}>
-                <View style={itemStyles.qtyBadge}>
-                  <Text style={itemStyles.qtyText}>{item.qty}x</Text>
-                </View>
-                <View style={itemStyles.info}>
-                  <Text style={itemStyles.name}>{item.name}</Text>
-                  {item.notes && (
-                    <Text style={itemStyles.notes}>📝 {item.notes}</Text>
-                  )}
-                </View>
-                <Text style={itemStyles.price}>
-                  ${(item.qty * item.price).toFixed(2)}
-                </Text>
-              </Animated.View>
-            ))}
+            {order.items.map((item, index) => {
+              const variationText = getItemVariationText(item);
 
-            {/* Special Instructions */}
-            {order.specialInstructions && (
+              return (
+                <Animated.View
+                  key={`${item.id}-${index}`}
+                  entering={FadeInRight.delay(350 + index * 60).duration(350)}
+                  style={[
+                    itemStyles.row,
+                    index < order.items.length - 1 && itemStyles.rowBorder,
+                  ]}>
+                  <View style={itemStyles.qtyBadge}>
+                    <Text style={itemStyles.qtyText}>{item.quantity}x</Text>
+                  </View>
+                  <View style={itemStyles.info}>
+                    <Text style={itemStyles.name}>{item.name}</Text>
+                    {variationText ? (
+                      <Text style={itemStyles.notes}>{variationText}</Text>
+                    ) : null}
+                  </View>
+                  <Text style={itemStyles.price}>
+                    {formatCurrency(item.quantity * item.price)}
+                  </Text>
+                </Animated.View>
+              );
+            })}
+
+            {order.specialInstructions ? (
               <View style={itemStyles.instructions}>
                 <MaterialCommunityIcons
                   name="message-text-outline"
@@ -528,10 +605,9 @@ export default function OrderDetailsScreen() {
                   {order.specialInstructions}
                 </Text>
               </View>
-            )}
+            ) : null}
           </Animated.View>
 
-          {/* ── Payment Summary ── */}
           <Animated.View
             entering={FadeInDown.delay(400).duration(400)}
             style={styles.card}>
@@ -548,20 +624,20 @@ export default function OrderDetailsScreen() {
             <View style={summaryStyles.row}>
               <Text style={summaryStyles.label}>Subtotal</Text>
               <Text style={summaryStyles.value}>
-                ${order.subtotal.toFixed(2)}
+                {formatCurrency(order.subtotal)}
               </Text>
             </View>
             <View style={summaryStyles.row}>
               <Text style={summaryStyles.label}>Delivery Fee</Text>
               <Text style={summaryStyles.value}>
-                ${order.deliveryFee.toFixed(2)}
+                {formatCurrency(order.deliveryFee)}
               </Text>
             </View>
             {order.discount > 0 && (
               <View style={summaryStyles.row}>
                 <Text style={summaryStyles.label}>Discount</Text>
                 <Text style={[summaryStyles.value, { color: '#047857' }]}>
-                  -${order.discount.toFixed(2)}
+                  -{formatCurrency(order.discount)}
                 </Text>
               </View>
             )}
@@ -569,37 +645,135 @@ export default function OrderDetailsScreen() {
             <View style={summaryStyles.row}>
               <Text style={summaryStyles.totalLabel}>Total</Text>
               <Text style={summaryStyles.totalValue}>
-                ${order.total.toFixed(2)}
+                {formatCurrency(order.total)}
               </Text>
             </View>
 
             <View style={summaryStyles.paymentMethod}>
               <MaterialCommunityIcons
-                name={
-                  order.paymentMethod === 'GCash'
-                    ? 'cellphone'
-                    : 'cash'
-                }
+                name={order.paymentMethod === 'gcash' ? 'cellphone' : 'cash'}
                 size={16}
                 color="#666"
               />
               <Text style={summaryStyles.paymentText}>
-                Paid via {order.paymentMethod}
+                {getPaymentMethodLabel(order.paymentMethod)} - {getPaymentStatusLabel(order.paymentStatus)}
               </Text>
             </View>
           </Animated.View>
 
-          {/* ── Action Buttons ── */}
+          {hasOnlinePayment ? (
+            <Animated.View
+              entering={FadeInDown.delay(450).duration(400)}
+              style={styles.card}>
+              <View style={styles.cardHeader}>
+                <MaterialCommunityIcons
+                  name="receipt-text-outline"
+                  size={18}
+                  color="#AC1D10"
+                />
+                <Text style={styles.cardTitle}>Proof of Payment</Text>
+              </View>
+
+              <View style={paymentStyles.detailBox}>
+                <View style={summaryStyles.row}>
+                  <Text style={summaryStyles.label}>Method</Text>
+                  <Text style={summaryStyles.value}>
+                    {getPaymentMethodLabel(order.paymentMethod)}
+                  </Text>
+                </View>
+                {order.paymentSenderName ? (
+                  <View style={summaryStyles.row}>
+                    <Text style={summaryStyles.label}>Sender</Text>
+                    <Text style={summaryStyles.value}>{order.paymentSenderName}</Text>
+                  </View>
+                ) : null}
+                {order.paymentTransactionId ? (
+                  <View style={summaryStyles.row}>
+                    <Text style={summaryStyles.label}>Reference</Text>
+                    <Text style={[summaryStyles.value, paymentStyles.reference]}>
+                      {order.paymentTransactionId}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+
+              {order.paymentReceipt ? (
+                <Image
+                  source={{ uri: order.paymentReceipt }}
+                  style={paymentStyles.receipt}
+                  resizeMode="contain"
+                />
+              ) : (
+                <View style={paymentStyles.emptyReceipt}>
+                  <MaterialCommunityIcons name="image-off-outline" size={28} color="#BBB" />
+                  <Text style={paymentStyles.emptyReceiptTitle}>No receipt uploaded yet</Text>
+                  <Text style={paymentStyles.emptyReceiptText}>
+                    The customer has not uploaded a payment screenshot.
+                  </Text>
+                </View>
+              )}
+
+              {canReviewPayment ? (
+                <View style={paymentStyles.actions}>
+                  <Pressable
+                    disabled={isPaymentUpdating}
+                    onPress={() => paymentMutation.mutate({ action: 'confirm' })}
+                    style={({ pressed }) => [
+                      paymentStyles.confirmBtn,
+                      pressed && actionBtnStyles.pressed,
+                      isPaymentUpdating && actionBtnStyles.disabled,
+                    ]}>
+                    <Text style={paymentStyles.confirmText}>Confirm Payment</Text>
+                  </Pressable>
+                  <Pressable
+                    disabled={isPaymentUpdating}
+                    onPress={() => paymentMutation.mutate({ action: 'reject' })}
+                    style={({ pressed }) => [
+                      paymentStyles.rejectBtn,
+                      pressed && actionBtnStyles.pressed,
+                      isPaymentUpdating && actionBtnStyles.disabled,
+                    ]}>
+                    <Text style={paymentStyles.rejectText}>Reject</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+            </Animated.View>
+          ) : null}
+
           <Animated.View
             entering={FadeInDown.delay(500).duration(400)}
             style={styles.actionsCard}>
-            <OrderActionButton status={order.status} />
+            {nextStatus ? (
+              <OrderActionButton
+                status={order.status}
+                isLoading={isStatusUpdating}
+                onPress={() => handleStatusChange(nextStatus)}
+              />
+            ) : (
+              <View style={actionBtnStyles.completeState}>
+                <MaterialCommunityIcons
+                  name={order.status === 'Cancelled' ? 'close-circle-outline' : 'check-circle-outline'}
+                  size={18}
+                  color={order.status === 'Cancelled' ? '#DC2626' : '#047857'}
+                />
+                <Text
+                  style={[
+                    actionBtnStyles.completeText,
+                    { color: order.status === 'Cancelled' ? '#DC2626' : '#047857' },
+                  ]}>
+                  {order.status === 'Cancelled' ? 'Order Cancelled' : 'Order Completed'}
+                </Text>
+              </View>
+            )}
 
-            {order.status === 'new' && (
+            {order.status === 'Pending' && (
               <Pressable
+                disabled={isStatusUpdating}
+                onPress={handleDecline}
                 style={({ pressed }) => [
                   actionBtnStyles.secondary,
                   pressed && actionBtnStyles.pressed,
+                  isStatusUpdating && actionBtnStyles.disabled,
                 ]}>
                 <MaterialCommunityIcons
                   name="close-circle-outline"
@@ -611,22 +785,8 @@ export default function OrderDetailsScreen() {
                 </Text>
               </Pressable>
             )}
-
-            <Pressable
-              style={({ pressed }) => [
-                actionBtnStyles.outline,
-                pressed && actionBtnStyles.pressed,
-              ]}>
-              <MaterialCommunityIcons
-                name="printer-outline"
-                size={18}
-                color="#555"
-              />
-              <Text style={actionBtnStyles.outlineText}>Print Receipt</Text>
-            </Pressable>
           </Animated.View>
 
-          {/* Bottom spacer */}
           <View style={{ height: 40 }} />
         </ScrollView>
       </View>
@@ -634,7 +794,6 @@ export default function OrderDetailsScreen() {
   );
 }
 
-/* ─── Styles ─── */
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#F8F8F8' },
   container: { flex: 1 },
@@ -643,8 +802,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
+    paddingHorizontal: 24,
   },
-  notFoundText: { fontSize: 16, fontWeight: '600', color: '#999' },
+  notFoundText: { fontSize: 16, fontWeight: '600', color: '#999', textAlign: 'center' },
+  centerSubtitle: { fontSize: 13, color: '#AAA', lineHeight: 18, textAlign: 'center' },
   backBtn: {
     marginTop: 8,
     backgroundColor: '#AC1D10',
@@ -654,7 +815,6 @@ const styles = StyleSheet.create({
   },
   backBtnText: { color: '#FFF', fontWeight: '700', fontSize: 14 },
 
-  /* Header */
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -678,7 +838,6 @@ const styles = StyleSheet.create({
 
   scrollContent: { paddingHorizontal: 16, paddingTop: 4 },
 
-  /* Status Card */
   statusCard: {
     backgroundColor: '#FFF',
     borderRadius: 16,
@@ -691,12 +850,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    gap: 12,
     marginBottom: 16,
   },
+  statusTitleWrap: { flex: 1 },
   orderNum: { fontSize: 18, fontWeight: '800', color: '#1A1A1A' },
   orderDate: { fontSize: 12, color: '#999', marginTop: 2 },
 
-  /* Card */
   card: {
     backgroundColor: '#FFF',
     borderRadius: 16,
@@ -718,7 +878,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  /* Actions Card */
   actionsCard: {
     backgroundColor: '#FFF',
     borderRadius: 16,
@@ -799,8 +958,8 @@ const itemStyles = StyleSheet.create({
   qtyText: { fontSize: 12, fontWeight: '800', color: '#AC1D10' },
   info: { flex: 1 },
   name: { fontSize: 14, fontWeight: '600', color: '#1A1A1A' },
-  notes: { fontSize: 11, color: '#B45309', marginTop: 2 },
-  price: { fontSize: 14, fontWeight: '700', color: '#1A1A1A' },
+  notes: { fontSize: 11, color: '#B45309', marginTop: 2, lineHeight: 16 },
+  price: { fontSize: 13, fontWeight: '700', color: '#1A1A1A' },
   instructions: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -826,10 +985,11 @@ const summaryStyles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 12,
     paddingVertical: 6,
   },
   label: { fontSize: 13, color: '#888' },
-  value: { fontSize: 13, color: '#1A1A1A', fontWeight: '500' },
+  value: { flex: 1, fontSize: 13, color: '#1A1A1A', fontWeight: '500', textAlign: 'right' },
   divider: {
     height: 1,
     backgroundColor: '#F0F0F0',
@@ -846,11 +1006,64 @@ const summaryStyles = StyleSheet.create({
     padding: 10,
     borderRadius: 10,
   },
-  paymentText: { fontSize: 12, color: '#666', fontWeight: '500' },
+  paymentText: { flex: 1, fontSize: 12, color: '#666', fontWeight: '500' },
+});
+
+const paymentStyles = StyleSheet.create({
+  detailBox: {
+    backgroundColor: '#F8F8F8',
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 12,
+  },
+  reference: { maxWidth: '60%' },
+  receipt: {
+    width: '100%',
+    height: 260,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#F9FAFB',
+  },
+  emptyReceipt: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 28,
+    paddingHorizontal: 18,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#F9FAFB',
+    gap: 6,
+  },
+  emptyReceiptTitle: { fontSize: 13, fontWeight: '700', color: '#777' },
+  emptyReceiptText: { fontSize: 12, color: '#AAA', textAlign: 'center', lineHeight: 17 },
+  actions: { flexDirection: 'row', gap: 10, marginTop: 12 },
+  confirmBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#047857',
+  },
+  confirmText: { color: '#FFF', fontSize: 13, fontWeight: '700' },
+  rejectBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  rejectText: { color: '#DC2626', fontSize: 13, fontWeight: '700' },
 });
 
 const actionBtnStyles = StyleSheet.create({
   primary: {
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -871,17 +1084,16 @@ const actionBtnStyles = StyleSheet.create({
     borderColor: '#FECACA',
   },
   secondaryText: { fontSize: 15, fontWeight: '700', color: '#DC2626' },
-  outline: {
+  completeState: {
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 14,
     borderRadius: 14,
     backgroundColor: '#F8F8F8',
-    borderWidth: 1,
-    borderColor: '#E8E8E8',
   },
-  outlineText: { fontSize: 15, fontWeight: '600', color: '#555' },
+  completeText: { fontSize: 15, fontWeight: '700' },
   pressed: { opacity: 0.7 },
+  disabled: { opacity: 0.7 },
 });
