@@ -1,303 +1,591 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  Image,
-  FlatList,
-  TextInput,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-} from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useQueryClient } from '@tanstack/react-query';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { StatusBar } from 'expo-status-bar';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useMemo, useState } from 'react';
+import {
+  Alert,
+  FlatList,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useRestaurantReviews } from '@/src/features/browse/api/useRestaurantReviews';
+import { getReviewedOrder, saveReviewedOrder, submitReviewForOrder } from '@/src/features/reviews/review-flow';
+
+const REVIEW_HIGHLIGHTS = ['Fresh Ingredients', 'Fast Delivery', 'Great Packaging', 'Still Warm', 'Tasty Food'];
+
+function formatOrderMeta(orderCreatedAt?: string) {
+  if (!orderCreatedAt) {
+    return '';
+  }
+
+  const orderDate = new Date(orderCreatedAt);
+  return orderDate.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function ReviewStars({
+  value,
+  onChange,
+  disabled = false,
+}: {
+  value: number;
+  onChange: (nextValue: number) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <View style={styles.starRow}>
+      {[1, 2, 3, 4, 5].map((star) => (
+        <Pressable
+          key={star}
+          style={styles.starButton}
+          disabled={disabled}
+          onPress={() => onChange(star)}>
+          <MaterialCommunityIcons
+            name={star <= value ? 'star' : 'star-outline'}
+            size={34}
+            color="#F6A623"
+          />
+        </Pressable>
+      ))}
+    </View>
+  );
+}
 
 export default function RatingsAndFeedbacks() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const {
+    id,
+    orderId,
+    storeName,
+    orderCreatedAt,
+    orderNumber,
+    itemImage,
+  } = useLocalSearchParams<{
+    id: string;
+    orderId?: string;
+    storeName?: string;
+    orderCreatedAt?: string;
+    orderNumber?: string;
+    itemImage?: string;
+  }>();
   const router = useRouter();
-
+  const queryClient = useQueryClient();
   const { data: reviewsData, isLoading } = useRestaurantReviews(id);
 
+  const [foodRating, setFoodRating] = useState(4);
+  const [deliveryRating, setDeliveryRating] = useState(4);
   const [reviewText, setReviewText] = useState('');
+  const [selectedHighlights, setSelectedHighlights] = useState<string[]>([]);
+  const [selectedPhotos, setSelectedPhotos] = useState<ImagePicker.ImagePickerAsset[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const renderHeader = () => {
-    if (!reviewsData) return null;
-    const { summary } = reviewsData;
-    return (
-      <View style={styles.headerContainer}>
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
-          <MaterialCommunityIcons name="chevron-left" size={28} color="#1A1A1A" />
-        </Pressable>
-        <Text style={styles.screenTitle}>Ratings & Feedbacks</Text>
-        <Text style={styles.subtitleText}>
-          <Text style={styles.subtitleTag}>Review Summary</Text> • {summary.total_reviews.toLocaleString()} verified reviews
-        </Text>
+  const existingReviewedOrder = useMemo(() => getReviewedOrder(orderId), [orderId]);
+  const hasReviewContext = !!orderId;
+  const hasSubmittedReview = !!existingReviewedOrder;
 
-        {/* Summary Card */}
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryLeft}>
-            <Text style={styles.averageScore}>{summary.average_rating.toFixed(1)}</Text>
-            <View style={styles.starsRow}>
-              {[1, 2, 3, 4, 5].map((star, i) => (
-                <MaterialCommunityIcons 
-                  key={i} 
-                  name={i + 1 <= Math.round(summary.average_rating) ? "star" : "star-outline"} 
-                  size={16} 
-                  color="#F9A825" 
-                />
-              ))}
-            </View>
-            <Text style={styles.baseReviewsText}>Based on {summary.total_reviews.toLocaleString()} reviews</Text>
-          </View>
+  const resolvedItemImage =
+    itemImage && !itemImage.startsWith('http')
+      ? `https://foodhub.tmc-innovations.com${itemImage}`
+      : itemImage;
 
-          <View style={styles.summaryRight}>
-            {summary.distribution.map((dist) => (
-              <View key={dist.rating} style={styles.distRow}>
-                <Text style={styles.distScore}>{dist.rating}</Text>
-                <View style={styles.distBarTrack}>
-                  <View style={[styles.distBarFill, { width: `${dist.percentage}%` }]} />
-                </View>
-                <Text style={styles.distCount}>{dist.count}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
+  const displayedFoodRating = hasSubmittedReview ? existingReviewedOrder.rating : foodRating;
+  const displayedDeliveryRating = hasSubmittedReview ? existingReviewedOrder.deliveryRating ?? existingReviewedOrder.rating : deliveryRating;
+  const displayedReviewText = hasSubmittedReview ? existingReviewedOrder.review : reviewText;
+  const displayedHighlights = hasSubmittedReview ? existingReviewedOrder.highlights ?? [] : selectedHighlights;
+  const displayedPhotos = hasSubmittedReview
+    ? (existingReviewedOrder.photoUris ?? []).map((uri) => ({ uri }))
+    : selectedPhotos;
 
-      {/* Filter Chips */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
-        <Pressable style={[styles.chip, styles.chipActive]}>
-          <Text style={styles.chipTextActive}>Most Recent</Text>
-        </Pressable>
-        <Pressable style={styles.chip}>
-          <Text style={styles.chipText}>Highest Rating</Text>
-        </Pressable>
-        <Pressable style={styles.chip}>
-          <MaterialCommunityIcons name="image-outline" size={16} color="#666" style={{ marginRight: 6 }} />
-          <Text style={styles.chipText}>With Photos</Text>
-        </Pressable>
-        <Pressable style={styles.chip}>
-          <MaterialCommunityIcons name="check-decagram-outline" size={16} color="#666" style={{ marginRight: 6 }} />
-          <Text style={styles.chipText}>Verified</Text>
-        </Pressable>
-      </ScrollView>
-    </View>
+  const toggleHighlight = (highlight: string) => {
+    if (hasSubmittedReview) {
+      return;
+    }
+
+    setSelectedHighlights((current) =>
+      current.includes(highlight)
+        ? current.filter((item) => item !== highlight)
+        : [...current, highlight]
     );
+  };
+
+  const handlePickPhotos = async () => {
+    if (hasSubmittedReview) {
+      return;
+    }
+
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Photos permission needed', 'Please allow photo access so you can attach review images.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsMultipleSelection: true,
+      quality: 0.7,
+      selectionLimit: 4,
+    });
+
+    if (!result.canceled) {
+      setSelectedPhotos(result.assets.slice(0, 4));
+    }
+  };
+
+  const handleSubmitReview = async () => {
+    if (!orderId) {
+      return;
+    }
+
+    const trimmedReview = reviewText.trim();
+
+    if (!trimmedReview) {
+      Alert.alert('Add your feedback', 'Please write a short review before submitting.');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      await submitReviewForOrder({
+        orderId: String(orderId),
+        restaurantId: String(id),
+        foodRating,
+        deliveryRating,
+        review: trimmedReview,
+        highlights: selectedHighlights,
+        photoAssets: selectedPhotos.map((asset) => ({
+          uri: asset.uri,
+          fileName: asset.fileName,
+          mimeType: asset.mimeType,
+        })),
+      });
+
+      saveReviewedOrder({
+        orderId: String(orderId),
+        restaurantId: String(id),
+        storeName: String(storeName ?? ''),
+        rating: foodRating,
+        deliveryRating,
+        review: trimmedReview,
+        highlights: selectedHighlights,
+        photoUris: selectedPhotos.map((asset) => asset.uri),
+        reviewedAt: new Date().toISOString(),
+      });
+
+      await queryClient.invalidateQueries({ queryKey: ['restaurant-reviews', id] });
+      Alert.alert('Review sent', 'Thanks for sharing your feedback.');
+      router.back();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to submit your review right now.';
+      Alert.alert('Review not sent', message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const renderReviewItem = ({ item }: { item: any }) => (
     <View style={styles.reviewCard}>
       <View style={styles.reviewHeader}>
-        <View style={[styles.avatar, { alignItems: 'center', justifyContent: 'center', backgroundColor: '#F0F0F0' }]}>
-          <Text style={{ fontWeight: '700', color: '#666' }}>{item.customer_initials}</Text>
+        <View style={styles.avatar}>
+          <Text style={styles.avatarText}>{item.customer_initials}</Text>
         </View>
         <View style={styles.reviewMeta}>
           <Text style={styles.reviewName}>{item.customer_name}</Text>
           <Text style={styles.reviewTime}>{item.created_at_human}</Text>
         </View>
-        <View style={styles.reviewStars}>
-          {[...Array(item.rating)].map((_, i) => (
-            <MaterialCommunityIcons key={i} name="star" size={14} color="#F9A825" />
+        <View style={styles.reviewStarsSmall}>
+          {Array.from({ length: item.rating }).map((_, index) => (
+            <MaterialCommunityIcons key={index} name="star" size={14} color="#F6A623" />
           ))}
         </View>
       </View>
 
       <Text style={styles.reviewText}>{item.review}</Text>
 
-      {item.photos && item.photos.length > 0 && (
+      {item.photos?.length ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.reviewPhotos}>
           {item.photos.map((photo: string, index: number) => (
-            <Image key={index} source={{ uri: `https://foodhub.tmc-innovations.com${photo}` }} style={styles.reviewPhoto} />
+            <Image
+              key={index}
+              source={{ uri: `https://foodhub.tmc-innovations.com${photo}` }}
+              style={styles.reviewPhoto}
+            />
           ))}
         </ScrollView>
-      )}
-
-      {item.owner_reply && (
-        <View style={{ backgroundColor: '#F7F7F7', padding: 12, borderRadius: 8, marginTop: -4, marginBottom: 12 }}>
-          <Text style={{ fontSize: 13, fontWeight: '700', color: '#1A1A1A', marginBottom: 4 }}>Restaurant Response</Text>
-          <Text style={{ fontSize: 13, color: '#444' }}>{item.owner_reply}</Text>
-        </View>
-      )}
-
-      <View style={styles.reviewFooterDivider} />
-      
-      <Pressable style={styles.helpfulBtn}>
-        <MaterialCommunityIcons name="thumb-up-outline" size={16} color="#666" />
-        <Text style={styles.helpfulText}>Helpful ({item.helpful_count})</Text>
-      </Pressable>
+      ) : null}
     </View>
   );
 
+  if (hasReviewContext) {
+    return (
+      <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+        <StatusBar style="dark" />
+
+        <View style={styles.composeHeader}>
+          <Pressable style={styles.backButton} onPress={() => router.back()}>
+            <MaterialCommunityIcons name="chevron-left" size={24} color="#1A1A1A" />
+          </Pressable>
+          <Text style={styles.composeTitle}>Write A Review</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+
+        <ScrollView contentContainerStyle={styles.composeContent} showsVerticalScrollIndicator={false}>
+          <View style={styles.orderCard}>
+            <View style={styles.orderThumb}>
+              {resolvedItemImage ? (
+                <Image source={{ uri: resolvedItemImage }} style={styles.orderThumbImage} />
+              ) : (
+                <MaterialCommunityIcons name="silverware-fork-knife" size={18} color="#AC1D10" />
+              )}
+            </View>
+            <View style={styles.orderInfo}>
+              <Text style={styles.orderName}>{storeName || 'Restaurant'}</Text>
+              <Text style={styles.orderMeta}>
+                {orderNumber || 'Order'}{formatOrderMeta(String(orderCreatedAt ?? '')) ? ` • ${formatOrderMeta(String(orderCreatedAt ?? ''))}` : ''}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.ratingBlock}>
+            <Text style={styles.ratingLabel}>How was the food?</Text>
+            <ReviewStars value={displayedFoodRating} onChange={setFoodRating} disabled={hasSubmittedReview} />
+          </View>
+
+          <View style={styles.deliveryCard}>
+            <Text style={styles.deliveryLabel}>How was the delivery?</Text>
+            <ReviewStars value={displayedDeliveryRating} onChange={setDeliveryRating} disabled={hasSubmittedReview} />
+          </View>
+
+          <Text style={styles.sectionHeading}>Share your experience</Text>
+          <TextInput
+            style={[styles.reviewInput, hasSubmittedReview && styles.reviewInputDisabled]}
+            placeholder="Share your culinary experience..."
+            placeholderTextColor="#B0B0B0"
+            multiline
+            editable={!hasSubmittedReview}
+            value={displayedReviewText}
+            onChangeText={setReviewText}
+          />
+
+          <View style={styles.photosSection}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.addPhotoTile,
+                (pressed || hasSubmittedReview) && styles.photoTilePressed,
+              ]}
+              disabled={hasSubmittedReview}
+              onPress={handlePickPhotos}>
+              <MaterialCommunityIcons name="camera" size={22} color="#8F8F8F" />
+              <Text style={styles.addPhotoText}>Add photos</Text>
+            </Pressable>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoPreviewRow}>
+              {displayedPhotos.map((asset, index) => (
+                <Image key={index} source={{ uri: asset.uri }} style={styles.selectedPhoto} />
+              ))}
+            </ScrollView>
+          </View>
+
+          <Text style={styles.sectionHeading}>Highlights</Text>
+          <View style={styles.highlightsWrap}>
+            {REVIEW_HIGHLIGHTS.map((highlight) => {
+              const isActive = displayedHighlights.includes(highlight);
+              return (
+                <Pressable
+                  key={highlight}
+                  style={[styles.highlightChip, isActive && styles.highlightChipActive]}
+                  onPress={() => toggleHighlight(highlight)}
+                  disabled={hasSubmittedReview}>
+                  <Text style={[styles.highlightChipText, isActive && styles.highlightChipTextActive]}>
+                    {highlight}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {hasSubmittedReview ? (
+            <View style={styles.submittedBanner}>
+              <MaterialCommunityIcons name="check-decagram" size={16} color="#1B9D4C" />
+              <Text style={styles.submittedText}>Your review has already been submitted for this order.</Text>
+            </View>
+          ) : (
+            <Pressable
+              style={({ pressed }) => [styles.submitButton, (pressed || isSubmitting) && styles.submitPressed]}
+              disabled={isSubmitting}
+              onPress={handleSubmitReview}>
+              <Text style={styles.submitButtonText}>{isSubmitting ? 'Submitting...' : 'Submit Review'}</Text>
+              <MaterialCommunityIcons name="send" size={18} color="#FFFFFF" />
+            </Pressable>
+          )}
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.screen} edges={['top']}>
       <StatusBar style="dark" />
-      
+
       {isLoading ? (
-        <>
-          {renderHeader()}
-          <View style={{ flex: 1, alignItems: 'center', paddingTop: 20 }}><Text>Loading reviews...</Text></View>
-        </>
+        <View style={styles.loadingWrap}>
+          <Text>Loading reviews...</Text>
+        </View>
       ) : (
         <FlatList
           data={reviewsData?.reviews || []}
           keyExtractor={(item) => String(item.id)}
           renderItem={renderReviewItem}
-          ListHeaderComponent={renderHeader}
           contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
+          ListHeaderComponent={
+            <View style={styles.listHeader}>
+              <Pressable style={styles.backButton} onPress={() => router.back()}>
+                <MaterialCommunityIcons name="chevron-left" size={24} color="#1A1A1A" />
+              </Pressable>
+              <Text style={styles.composeTitle}>Ratings & Feedbacks</Text>
+            </View>
+          }
         />
       )}
-
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
-      >
-        <View style={styles.inputContainer}>
-          <Image source={{ uri: 'https://randomuser.me/api/portraits/men/32.jpg' }} style={styles.inputAvatar} />
-          <TextInput
-            style={styles.textInput}
-            placeholder="Write a review..."
-            placeholderTextColor="#999"
-            value={reviewText}
-            onChangeText={setReviewText}
-          />
-        </View>
-      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  screen: {
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
-  headerContainer: {
+  composeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: 8,
+    paddingBottom: 12,
   },
   backButton: {
-    marginBottom: 16,
-    alignSelf: 'flex-start',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  screenTitle: {
+  headerSpacer: {
+    width: 36,
+  },
+  composeTitle: {
     fontSize: 24,
     fontWeight: '800',
     color: '#1A1A1A',
-    marginBottom: 4,
   },
-  subtitleText: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 24,
+  composeContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 28,
   },
-  subtitleTag: {
-    fontWeight: '700',
-    color: '#AC1D10',
-  },
-  summaryCard: {
+  orderCard: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#EFEFEF',
-    padding: 20,
-    marginBottom: 24,
+    alignItems: 'center',
+    backgroundColor: '#F7F7F7',
+    borderRadius: 16,
+    padding: 12,
+    marginTop: 8,
   },
-  summaryLeft: {
-    flex: 1,
+  orderThumb: {
+    width: 52,
+    height: 52,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E8E8E8',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRightWidth: 1,
-    borderRightColor: '#EFEFEF',
-    paddingRight: 16,
-  },
-  averageScore: {
-    fontSize: 48,
-    fontWeight: '800',
-    color: '#1A1A1A',
-    lineHeight: 56,
-  },
-  starsRow: {
-    flexDirection: 'row',
-    gap: 2,
-    marginBottom: 8,
-  },
-  baseReviewsText: {
-    fontSize: 11,
-    color: '#888',
-    textAlign: 'center',
-  },
-  summaryRight: {
-    flex: 1.5,
-    paddingLeft: 16,
-    justifyContent: 'space-between',
-  },
-  distRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  distScore: {
-    fontSize: 12,
-    color: '#888',
-    width: 12,
-  },
-  distBarTrack: {
-    flex: 1,
-    height: 6,
-    backgroundColor: '#F0F0F0',
-    borderRadius: 3,
-    marginHorizontal: 8,
     overflow: 'hidden',
   },
-  distBarFill: {
+  orderThumbImage: {
+    width: '100%',
     height: '100%',
-    backgroundColor: '#AC1D10',
-    borderRadius: 3,
   },
-  distCount: {
-    fontSize: 12,
-    color: '#666',
-    width: 28,
-    textAlign: 'right',
+  orderInfo: {
+    marginLeft: 12,
+    flex: 1,
   },
-  filterScroll: {
-    paddingBottom: 24,
-    gap: 8,
+  orderName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1A1A1A',
   },
-  chip: {
-    flexDirection: 'row',
+  orderMeta: {
+    marginTop: 3,
+    fontSize: 13,
+    color: '#8A8A8A',
+  },
+  ratingBlock: {
     alignItems: 'center',
-    paddingHorizontal: 16,
+    marginTop: 24,
+  },
+  ratingLabel: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1A1A1A',
+  },
+  deliveryCard: {
+    marginTop: 22,
+    borderRadius: 18,
+    backgroundColor: '#F8F8F8',
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  deliveryLabel: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1A1A1A',
+  },
+  starRow: {
+    flexDirection: 'row',
+    marginTop: 10,
+  },
+  starButton: {
+    marginHorizontal: 4,
+  },
+  sectionHeading: {
+    marginTop: 22,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1A1A1A',
+  },
+  reviewInput: {
+    marginTop: 12,
+    minHeight: 124,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E4E4E4',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    textAlignVertical: 'top',
+    fontSize: 15,
+    color: '#1A1A1A',
+    backgroundColor: '#FFFFFF',
+  },
+  reviewInputDisabled: {
+    backgroundColor: '#FAFAFA',
+    color: '#555555',
+  },
+  photosSection: {
+    marginTop: 20,
+  },
+  addPhotoTile: {
+    width: 92,
+    height: 92,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#D6D6D6',
+    backgroundColor: '#FAFAFA',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoTilePressed: {
+    opacity: 0.8,
+  },
+  addPhotoText: {
+    marginTop: 8,
+    fontSize: 13,
+    color: '#9A9A9A',
+  },
+  photoPreviewRow: {
+    gap: 10,
+    paddingTop: 14,
+    paddingRight: 4,
+  },
+  selectedPhoto: {
+    width: 92,
+    height: 92,
+    borderRadius: 16,
+    backgroundColor: '#F2F2F2',
+  },
+  highlightsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 12,
+  },
+  highlightChip: {
+    paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#EFEFEF',
+    borderColor: '#D8D8D8',
     backgroundColor: '#FFFFFF',
   },
-  chipActive: {
-    backgroundColor: '#FDECEA',
-    borderColor: '#FDECEA',
+  highlightChipActive: {
+    backgroundColor: '#FCE9E5',
+    borderColor: '#F0C3B8',
   },
-  chipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#444',
+  highlightChipText: {
+    fontSize: 14,
+    color: '#474747',
   },
-  chipTextActive: {
-    fontSize: 13,
+  highlightChipTextActive: {
+    color: '#B62618',
+    fontWeight: '700',
+  },
+  submitButton: {
+    marginTop: 26,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: '#AC1D10',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  submitPressed: {
+    opacity: 0.82,
+  },
+  submitButtonText: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  submittedBanner: {
+    marginTop: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#CDEDD7',
+    backgroundColor: '#F1FBF4',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  submittedText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 17,
+    color: '#24623B',
     fontWeight: '600',
-    color: '#AC1D10',
+  },
+  listHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 16,
   },
   listContent: {
-    paddingBottom: 100, // Make room for floating input
     paddingHorizontal: 16,
+    paddingBottom: 24,
   },
   reviewCard: {
     backgroundColor: '#FFFFFF',
@@ -316,7 +604,13 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     marginRight: 12,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#F0F0F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    fontWeight: '700',
+    color: '#666',
   },
   reviewMeta: {
     flex: 1,
@@ -332,7 +626,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#999',
   },
-  reviewStars: {
+  reviewStarsSmall: {
     flexDirection: 'row',
     gap: 2,
   },
@@ -343,61 +637,17 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   reviewPhotos: {
-    marginBottom: 16,
+    marginBottom: 4,
   },
   reviewPhoto: {
     width: 80,
     height: 80,
     borderRadius: 12,
     marginRight: 12,
-    backgroundColor: '#F5F5F5',
   },
-  reviewFooterDivider: {
-    height: 1,
-    backgroundColor: '#EFEFEF',
-    marginBottom: 12,
-  },
-  helpfulBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  helpfulText: {
-    fontSize: 13,
-    color: '#666',
-    fontWeight: '500',
-  },
-  keyboardView: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#EFEFEF',
-    paddingBottom: Platform.OS === 'ios' ? 24 : 0,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    gap: 12,
-  },
-  inputAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#F5F5F5',
-  },
-  textInput: {
+  loadingWrap: {
     flex: 1,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: '#EFEFEF',
-    paddingHorizontal: 16,
-    fontSize: 15,
-    color: '#1A1A1A',
-    backgroundColor: '#F9F9F9',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

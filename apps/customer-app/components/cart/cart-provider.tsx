@@ -116,6 +116,10 @@ export function CartProvider({ children }: React.PropsWithChildren) {
 
   // ── Sync Cart with Backend ──
   const syncCartWithBackend = useCallback(async (items: CartItemModel[]) => {
+    if (items.length === 0) {
+      return;
+    }
+
     try {
       const payload = items.map((item) => ({
         id: Number(item.id),

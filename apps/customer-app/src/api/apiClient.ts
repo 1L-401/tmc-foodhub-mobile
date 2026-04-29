@@ -25,11 +25,15 @@ export const apiClient = async <T>(endpoint: string, options?: RequestInit): Pro
   const url = `${BASE_URL}${endpoint}`;
 
   const token = await getStoredToken();
+  const isFormDataBody = typeof FormData !== 'undefined' && options?.body instanceof FormData;
 
   const defaultHeaders: Record<string, string> = {
-    'Content-Type': 'application/json',
     'Accept': 'application/json',
   };
+
+  if (!isFormDataBody) {
+    defaultHeaders['Content-Type'] = 'application/json';
+  }
 
   if (token) {
     defaultHeaders['Authorization'] = `Bearer ${token}`;

@@ -40,7 +40,6 @@ export default function CartScreen() {
     decreaseQuantity,
     removeItem,
     fetchCart,
-    isCartLoading,
   } = useCart();
   const { preferredPayment } = usePayment();
 
@@ -224,6 +223,7 @@ export default function CartScreen() {
           </View>
         )}
       </Animated.View>
+
     </SafeAreaView>
   );
 }

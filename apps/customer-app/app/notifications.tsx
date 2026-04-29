@@ -1,9 +1,13 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { apiClient } from '@/src/api/apiClient';
+import { applyLocalOrderStatuses } from '@/src/features/orders/local-order-status';
+import { isOngoingStatus, normalizeOrderStatus } from '@/src/features/orders/order-status';
 
 /* ─── Mock Data ──────────────────────────────────────────────────────────── */
 const FILTERS = ['All', 'Orders', 'Offers', 'News & Blogs'];
@@ -63,6 +67,40 @@ const EARLIER_NOTIFICATIONS = [
 /* ─── Component ──────────────────────────────────────────────────────────── */
 export default function NotificationsScreen() {
   const [activeFilter, setActiveFilter] = useState('All');
+  const [ongoingOrder, setOngoingOrder] = useState<any>(null);
+
+  const fetchOngoingOrder = useCallback(async () => {
+    try {
+      const response = await apiClient<any[]>('/orders');
+      const mergedOrders = applyLocalOrderStatuses(response || []);
+      setOngoingOrder(mergedOrders.find((order) => isOngoingStatus(order.status)) ?? null);
+    } catch (error) {
+      console.error('Failed to load notifications order tracker:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchOngoingOrder();
+  }, [fetchOngoingOrder]);
+
+  const handleBackPress = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace('/(tabs)');
+  };
+
+  const ongoingStatusText = (() => {
+    const normalizedStatus = normalizeOrderStatus(ongoingOrder?.status);
+
+    if (normalizedStatus === 'pending') return 'Waiting for restaurant confirmation';
+    if (normalizedStatus === 'order confirmed') return 'Restaurant confirmed your order';
+    if (normalizedStatus === 'preparing') return 'Your food is being prepared';
+    if (normalizedStatus === 'out for delivery') return 'Your rider is on the way';
+    return ongoingOrder?.status ?? '';
+  })();
 
   const renderCard = (item: any) => {
     return (
@@ -110,7 +148,7 @@ export default function NotificationsScreen() {
       <View style={styles.topBar}>
         <Pressable
           style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
-          onPress={() => router.back()}>
+          onPress={handleBackPress}>
           <MaterialCommunityIcons name="chevron-left" size={26} color="#1A1A1A" />
         </Pressable>
       </View>
@@ -118,6 +156,32 @@ export default function NotificationsScreen() {
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Main Title */}
         <Text style={styles.pageTitle}>Notifications</Text>
+
+        {ongoingOrder ? (
+          <Pressable
+            style={({ pressed }) => [styles.liveOrderCard, pressed && styles.pressed]}
+            onPress={() =>
+              router.push({
+                pathname: '/order-tracking/[id]',
+                params: { id: ongoingOrder.id },
+              })
+            }>
+            <View style={styles.liveOrderIconWrap}>
+              <MaterialCommunityIcons name="motorbike" size={18} color="#FFFFFF" />
+            </View>
+            <View style={styles.liveOrderCopyWrap}>
+              <Text style={styles.liveOrderTitle} numberOfLines={1}>
+                {ongoingOrder.store_name || `Order #${ongoingOrder.id}`}
+              </Text>
+              <Text style={styles.liveOrderSubtitle} numberOfLines={1}>
+                {ongoingStatusText}
+              </Text>
+            </View>
+            <View style={styles.liveOrderAction}>
+              <Text style={styles.liveOrderActionText}>Track</Text>
+            </View>
+          </Pressable>
+        ) : null}
 
         {/* Filter Chips */}
         <ScrollView
@@ -187,6 +251,52 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginTop: 4,
     marginBottom: 16,
+  },
+  liveOrderCard: {
+    marginHorizontal: 20,
+    marginBottom: 18,
+    borderRadius: 18,
+    backgroundColor: '#AC1D10',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  liveOrderIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  liveOrderCopyWrap: {
+    flex: 1,
+    marginLeft: 12,
+    marginRight: 10,
+  },
+  liveOrderTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  liveOrderSubtitle: {
+    marginTop: 2,
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.82)',
+  },
+  liveOrderAction: {
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  liveOrderActionText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#AC1D10',
   },
   filterList: {
     paddingHorizontal: 20,
