@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export const BASE_URL = 'https://foodhub.tmc-innovations.com/api';
+import { API_BASE_URL, buildApiUrl } from '@/src/api/apiConfig';
+
+export const BASE_URL = API_BASE_URL;
 
 const OWNER_AUTH_TOKEN_STORAGE_KEY = 'owner.auth.token';
 
@@ -17,7 +19,7 @@ const getStoredToken = async (): Promise<string | null> => {
  * Handles automatic base URL injection and standardized error throwing.
  */
 export const apiClient = async <T>(endpoint: string, options?: RequestInit): Promise<T> => {
-  const url = `${BASE_URL}${endpoint}`;
+  const url = buildApiUrl(endpoint);
   const token = await getStoredToken();
 
   const defaultHeaders: Record<string, string> = {

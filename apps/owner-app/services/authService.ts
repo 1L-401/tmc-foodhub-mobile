@@ -1,4 +1,6 @@
-const OWNER_LOGIN_URL = 'https://foodhub.tmc-innovations.com/api/owner/login';
+import { buildApiUrl } from '@/src/api/apiConfig';
+
+const OWNER_LOGIN_URL = buildApiUrl('/owner/login');
 
 type ErrorCode = 'NETWORK' | 'SERVER' | 'INVALID_RESPONSE';
 
