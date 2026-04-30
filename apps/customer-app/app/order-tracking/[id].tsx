@@ -227,13 +227,13 @@ export default function OrderTrackingScreen() {
     try {
       const restaurantId = await resolveRestaurantIdForOrder(order as Record<string, unknown>);
       if (!restaurantId) {
-        Alert.alert('Restaurant unavailable', 'We could not find this restaurant right now.');
+        Alert.alert('Restaurant not found', 'Restaurant not found.');
         return;
       }
 
       router.push({ pathname: '/restaurant/[id]', params: { id: restaurantId } });
     } catch {
-      Alert.alert('Restaurant unavailable', 'We could not open this restaurant right now.');
+      Alert.alert('Restaurant not found', 'Restaurant not found.');
     }
   };
 
@@ -241,7 +241,7 @@ export default function OrderTrackingScreen() {
     try {
       const restaurantId = await resolveRestaurantIdForOrder(order as Record<string, unknown>);
       if (!restaurantId) {
-        Alert.alert('Review unavailable', 'We could not find the restaurant for this order.');
+        Alert.alert('Restaurant not found', 'Restaurant not found.');
         return;
       }
 
@@ -250,10 +250,10 @@ export default function OrderTrackingScreen() {
         params: {
           id: restaurantId,
           orderId: String(order.id),
-          storeName: String(order.store_name ?? ''),
+          storeName: String(order.store?.name ?? order.store_name ?? ''),
           orderCreatedAt: String(order.created_at ?? ''),
           orderNumber: `#${order.id}`,
-          itemImage: String(order.items?.[0]?.image ?? ''),
+          itemImage: String(order.items?.[0]?.image_url ?? order.items?.[0]?.image ?? ''),
         },
       });
     } catch {

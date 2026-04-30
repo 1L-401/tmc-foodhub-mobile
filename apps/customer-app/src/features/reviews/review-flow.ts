@@ -81,6 +81,7 @@ export function getRestaurantIdFromSource(source: Record<string, unknown> | null
     source.store_id,
     source.storeId,
     (source.restaurant as { id?: string | number } | undefined)?.id,
+    (source.store as { id?: string | number } | undefined)?.id,
   ];
 
   const match = candidates.find((candidate) => candidate !== undefined && candidate !== null && candidate !== '');

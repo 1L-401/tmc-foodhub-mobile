@@ -11,10 +11,12 @@ import { OngoingOrderBar } from '@/components/orders/ongoing-order-bar';
 import { PaymentProvider } from '@/components/payment';
 import { AuthProvider, useAuth } from '@/contexts/auth-context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { usePushNotifications } from '@/src/hooks/usePushNotifications';
 
 const queryClient = new QueryClient();
 
 function RootStack() {
+  usePushNotifications();
   const segments = useSegments();
   const { isAuthenticated, isReady, user } = useAuth();
 

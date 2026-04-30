@@ -9,79 +9,54 @@ import { apiClient } from '@/src/api/apiClient';
 import { applyLocalOrderStatuses } from '@/src/features/orders/local-order-status';
 import { isOngoingStatus, normalizeOrderStatus } from '@/src/features/orders/order-status';
 
-/* ─── Mock Data ──────────────────────────────────────────────────────────── */
-const FILTERS = ['All', 'Orders', 'Offers', 'News & Blogs'];
-
-const RECENT_NOTIFICATIONS = [
-  {
-    id: 'n1',
-    type: 'order',
-    icon: 'moped',
-    iconBg: '#FFF3ED',
-    iconColor: '#D9531E',
-    title: 'Order Out for Delivery',
-    time: '2m ago',
-    description: 'Your feast from Patty Shack is on its way with our top-rated rider, Ricardo.',
-    embeddedDetails: {
-      image: 'https://images.unsplash.com/photo-1600891964092-4316c288032e?auto=format&fit=crop&w=150&q=80',
-      title: 'Grilled Steak + Black Iced Coffee',
-      eta: 'Estimated arrival: 12:45 PM',
-    },
-  },
-  {
-    id: 'n2',
-    type: 'offer',
-    icon: 'party-popper',
-    iconBg: '#F0F4FF',
-    iconColor: '#3B68FF',
-    title: "Chef's Secret Discount",
-    time: '1h ago',
-    description: 'Enjoy 30% off on all Italian delicacies this weekend. Use code PASTALOVE.',
-  },
-];
-
-const EARLIER_NOTIFICATIONS = [
-  {
-    id: 'n3',
-    type: 'recommendation',
-    icon: 'silverware-fork-knife',
-    iconBg: '#FFF5EB',
-    iconColor: '#D97D19',
-    title: 'Curated for You',
-    time: 'Yesterday',
-    description: "Based on your love for Spicy Ramen, we think you'll adore Kyoto Noodle Bar's new menu.",
-  },
-  {
-    id: 'n4',
-    type: 'rating',
-    icon: 'star',
-    iconBg: '#FFF9E6',
-    iconColor: '#F5A623',
-    title: 'How was your meal?',
-    time: 'Yesterday',
-    description: "Your feedback helps us curate the best experiences. Rate your order from Mama's Kitchen.",
-    showStars: true,
-  },
-];
+const FILTERS = ['All', 'Orders'];
 
 /* ─── Component ──────────────────────────────────────────────────────────── */
 export default function NotificationsScreen() {
   const [activeFilter, setActiveFilter] = useState('All');
   const [ongoingOrder, setOngoingOrder] = useState<any>(null);
+  const [dynamicOrderNotifications, setDynamicOrderNotifications] = useState<any[]>([]);
 
-  const fetchOngoingOrder = useCallback(async () => {
+  const fetchNotificationsData = useCallback(async () => {
     try {
       const response = await apiClient<any[]>('/orders');
       const mergedOrders = applyLocalOrderStatuses(response || []);
-      setOngoingOrder(mergedOrders.find((order) => isOngoingStatus(order.status)) ?? null);
+      
+      const ongoing = mergedOrders.find((order) => isOngoingStatus(order.status));
+      setOngoingOrder(ongoing ?? null);
+
+      // Create notifications from past/recent orders
+      const orderNotifications = mergedOrders
+        .filter(order => order.id !== ongoing?.id)
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, 5)
+        .map(order => ({
+          id: `order-${order.id}`,
+          type: 'order',
+          icon: 'moped',
+          iconBg: '#FFF3ED',
+          iconColor: '#D9531E',
+          title: `Order from ${order.store?.name || order.store_name || 'Restaurant'}`,
+          rawDate: order.created_at,
+          time: order.created_at ? new Date(order.created_at).toLocaleDateString() : 'Recent',
+          description: `Status: ${normalizeOrderStatus(order.status || 'unknown').toUpperCase()}. Total: ₱${Number(order.total_amount || order.total || 0).toFixed(2)}`,
+          orderId: order.id,
+          embeddedDetails: order.items && order.items.length > 0 && order.items[0]?.image_url ? {
+            image: order.items[0].image_url,
+            title: order.items.map((i: any) => i.name).join(', '),
+            eta: `Order #${order.id}`,
+          } : undefined,
+        }));
+
+      setDynamicOrderNotifications(orderNotifications);
     } catch (error) {
       console.error('Failed to load notifications order tracker:', error);
     }
   }, []);
 
   useEffect(() => {
-    fetchOngoingOrder();
-  }, [fetchOngoingOrder]);
+    fetchNotificationsData();
+  }, [fetchNotificationsData]);
 
   const handleBackPress = () => {
     if (router.canGoBack()) {
@@ -102,9 +77,31 @@ export default function NotificationsScreen() {
     return ongoingOrder?.status ?? '';
   })();
 
+  const now = new Date().getTime();
+  const recentThreshold = 24 * 60 * 60 * 1000; // 24 hours
+  
+  const recentNotifications = dynamicOrderNotifications.filter(
+    (n) => now - new Date(n.rawDate).getTime() <= recentThreshold
+  );
+  
+  const earlierNotifications = dynamicOrderNotifications.filter(
+    (n) => now - new Date(n.rawDate).getTime() > recentThreshold
+  );
+
   const renderCard = (item: any) => {
     return (
-      <View key={item.id} style={styles.card}>
+      <Pressable 
+        key={item.id} 
+        style={styles.card}
+        onPress={() => {
+          if (item.orderId) {
+            router.push({
+              pathname: '/order-tracking/[id]',
+              params: { id: item.orderId },
+            });
+          }
+        }}
+      >
         <View style={styles.cardHeader}>
           <View style={[styles.iconWrap, { backgroundColor: item.iconBg }]}>
             <MaterialCommunityIcons name={item.icon as any} size={20} color={item.iconColor} />
@@ -138,7 +135,7 @@ export default function NotificationsScreen() {
             ))}
           </View>
         )}
-      </View>
+      </Pressable>
     );
   };
 
@@ -206,16 +203,30 @@ export default function NotificationsScreen() {
         </ScrollView>
 
         {/* Recent Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Recent</Text>
-          {RECENT_NOTIFICATIONS.map(renderCard)}
-        </View>
+        {recentNotifications.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Recent</Text>
+            {recentNotifications
+              .filter(n => activeFilter === 'All' || n.type === activeFilter.toLowerCase().replace('s', '') || (activeFilter === 'Orders' && n.type === 'order'))
+              .map(renderCard)}
+          </View>
+        )}
 
         {/* Earlier Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Earlier</Text>
-          {EARLIER_NOTIFICATIONS.map(renderCard)}
-        </View>
+        {earlierNotifications.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Earlier</Text>
+            {earlierNotifications
+              .filter(n => activeFilter === 'All' || n.type === activeFilter.toLowerCase().replace('s', '') || (activeFilter === 'Orders' && n.type === 'order'))
+              .map(renderCard)}
+          </View>
+        )}
+        
+        {dynamicOrderNotifications.length === 0 && (
+          <View style={{ padding: 40, alignItems: 'center' }}>
+            <Text style={{ color: '#888' }}>No notifications yet.</Text>
+          </View>
+        )}
 
         <View style={{ height: 40 }} />
       </ScrollView>
