@@ -214,6 +214,7 @@ export default function CartScreen() {
               subtotal={subtotal}
               deliveryFee={deliveryFee}
               discount={appliedDiscount}
+              promoCode={promoCode}
             />
 
             <CheckoutBar

@@ -5,13 +5,14 @@ interface CheckoutTotalsCardProps {
   deliveryFee: number;
   discount: number;
   total: number;
+  promoCode?: string;
 }
 
 function formatPrice(value: number) {
   return `$${value.toFixed(2)}`;
 }
 
-export function CheckoutTotalsCard({ subtotal, deliveryFee, discount, total }: CheckoutTotalsCardProps) {
+export function CheckoutTotalsCard({ subtotal, deliveryFee, discount, total, promoCode }: CheckoutTotalsCardProps) {
   return (
     <View style={styles.container}>
       <View style={styles.row}>
@@ -25,7 +26,7 @@ export function CheckoutTotalsCard({ subtotal, deliveryFee, discount, total }: C
       </View>
 
       <View style={styles.row}>
-        <Text style={styles.label}>Discount (PROMO5)</Text>
+        <Text style={styles.label}>Discount{promoCode ? ` (${promoCode.toUpperCase()})` : ''}</Text>
         <Text style={styles.value}>-{formatPrice(discount)}</Text>
       </View>
 
