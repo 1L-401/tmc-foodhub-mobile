@@ -4,6 +4,7 @@ interface OrderSummaryProps {
   subtotal: number;
   deliveryFee: number;
   discount: number;
+  promoCode?: string;
 }
 
 function formatPrice(value: number) {
@@ -14,6 +15,7 @@ export function OrderSummary({
   subtotal,
   deliveryFee,
   discount,
+  promoCode,
 }: OrderSummaryProps) {
   return (
     <View style={styles.container}>
@@ -28,7 +30,7 @@ export function OrderSummary({
       </View>
 
       <View style={styles.row}>
-        <Text style={styles.discountLabel}>Discount (PROMO5)</Text>
+        <Text style={styles.discountLabel}>Discount{promoCode ? ` (${promoCode.toUpperCase()})` : ''}</Text>
         <Text style={styles.discountValue}>-{formatPrice(discount)}</Text>
       </View>
     </View>

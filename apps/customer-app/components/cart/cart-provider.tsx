@@ -56,7 +56,7 @@ interface CartContextValue {
   activeOrder: ActiveOrder | null;
   addressCoords: { latitude: number; longitude: number } | null;
   setPromoCode: (value: string) => void;
-  applyPromoCode: () => void;
+  applyPromoCode: () => Promise<void>;
   setSpecialInstructions: (value: string) => void;
   addItem: (item: CartItemModel) => void;
   increaseQuantity: (id: string) => void;
@@ -350,16 +350,39 @@ export function CartProvider({ children }: React.PropsWithChildren) {
     setSelectedAddressId(id);
   }, [savedAddresses]);
 
-  const applyPromoCode = useCallback(() => {
-    const normalizedCode = promoCode.trim().toUpperCase();
+  const applyPromoCode = useCallback(async () => {
+    const normalizedCode = promoCode.trim();
 
-    if (!normalizedCode || normalizedCode === 'PROMO5') {
-      setAppliedDiscount(5);
+    if (!normalizedCode) {
+      setAppliedDiscount(0);
       return;
     }
 
-    setAppliedDiscount(0);
-  }, [promoCode]);
+    try {
+      const payload = {
+        code: normalizedCode,
+        restaurant_id: cartItems[0]?.restaurantId ? Number(cartItems[0].restaurantId) : undefined,
+        subtotal: subtotal
+      };
+
+      const response = await apiClient<any>('/promotions/apply', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      const discountVal = response.discount_amount ?? response.discount ?? response.amount ?? 0;
+      setAppliedDiscount(Number(discountVal));
+      
+      const { Alert } = require('react-native');
+      Alert.alert('Promo Applied', 'Your promotion code was applied successfully!');
+    } catch (error: any) {
+      console.error('Promo code error:', error);
+      const { Alert } = require('react-native');
+      Alert.alert('Invalid Promo Code', error.message || 'This promotion code is invalid or has expired.');
+      setAppliedDiscount(0);
+      setPromoCode('');
+    }
+  }, [promoCode, cartItems, subtotal]);
 
   const placeOrderFromCart = useCallback(async (paymentMethod: CheckoutPaymentOption) => {
     if (!cartItems.length) {

@@ -22,6 +22,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient } from '@/src/api/apiClient';
 
 import { TmcLogo } from '@/components/tmc-logo';
 import { SectionHeader } from '@/components/home/section-header';
@@ -43,6 +45,49 @@ export default function HomeScreen() {
     isError: isRestaurantsError,
     error: restaurantsError,
   } = useRestaurants();
+
+  const { data: pastOrders } = useQuery({
+    queryKey: ['past-orders'],
+    queryFn: () => apiClient<any[]>('/orders'),
+  });
+
+  const liveOrderAgain = React.useMemo(() => {
+    if (!pastOrders) return [];
+    
+    // Filter to completed orders and get unique restaurants
+    const uniqueStores = new Set();
+    const mapped = [];
+
+    for (const o of pastOrders) {
+      if (o.status !== 'Delivered') continue;
+      
+      const restId = String(o.restaurant_id || o.store?.id || o.restaurant?.id || o.id);
+      if (uniqueStores.has(restId)) continue;
+      uniqueStores.add(restId);
+
+      const matchedRestaurant = restaurants?.find((r: any) => String(r.id) === restId);
+      const rawImage = matchedRestaurant?.cover_photo || o.store?.cover_photo || o.store?.image || o.items?.[0]?.image;
+      
+      const imageUrl = rawImage 
+        ? (rawImage.startsWith('http') ? rawImage : `https://foodhub.tmc-innovations.com${rawImage}`)
+        : undefined;
+
+      mapped.push({
+        id: restId,
+        name: o.store_name || 'Restaurant',
+        category: o.items?.[0]?.item_name || 'Food Item',
+        rating: 5.0, 
+        reviews: 99,
+        price: Number(o.total || 0),
+        time: 'Order Again',
+        color: '#FBE7E4',
+        image: imageUrl,
+      });
+
+      if (mapped.length >= 5) break;
+    }
+    return mapped;
+  }, [pastOrders]);
 
   const headerScale = useSharedValue(0.95);
   const headerOpacity = useSharedValue(0);
@@ -134,19 +179,21 @@ export default function HomeScreen() {
         </Animated.View>
 
         {/* ─── Order Again ─── */}
-        <Animated.View entering={FadeInDown.delay(200).springify()}>
-          <SectionHeader title="Order again" />
-          <FlatList
-            data={ORDER_AGAIN}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.horizontalList}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <OrderAgainCard item={item} />
-            )}
-          />
-        </Animated.View>
+        {liveOrderAgain.length > 0 && (
+          <Animated.View entering={FadeInDown.delay(200).springify()}>
+            <SectionHeader title="Order again" />
+            <FlatList
+              data={liveOrderAgain}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalList}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <OrderAgainCard item={item} />
+              )}
+            />
+          </Animated.View>
+        )}
 
         {/* ─── Explore Restaurants Nearby ─── */}
         <Animated.View entering={FadeInDown.delay(250).springify()}>
