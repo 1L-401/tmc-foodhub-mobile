@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Dimensions, Image } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { useRouter } from 'expo-router';
@@ -16,6 +16,7 @@ export type OrderAgainItem = {
   price: number;
   time: string;
   color: string;
+  image?: string;
 };
 
 export function OrderAgainCard({ item }: { item: OrderAgainItem }) {
@@ -26,9 +27,13 @@ export function OrderAgainCard({ item }: { item: OrderAgainItem }) {
       style={styles.orderAgainCard}
       onPress={() => router.push(`/restaurant/${item.id}`)}
     >
-      {/* Image placeholder */}
+      {/* Image / Placeholder */}
       <View style={[styles.orderAgainImage, { backgroundColor: item.color }]}>
-        <MaterialCommunityIcons name="food" size={40} color="rgba(255,255,255,0.3)" />
+        {item.image ? (
+          <Image source={{ uri: item.image }} style={styles.imageBackground} />
+        ) : (
+          <MaterialCommunityIcons name="food" size={40} color="rgba(255,255,255,0.3)" />
+        )}
       </View>
       {/* Info */}
       <View style={styles.orderAgainInfo}>
@@ -65,6 +70,13 @@ const styles = StyleSheet.create({
     height: 120,
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
+  },
+  imageBackground: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
   },
   orderAgainInfo: {
     padding: 12,
