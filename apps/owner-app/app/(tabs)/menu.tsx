@@ -20,6 +20,7 @@ import Animated, { FadeInDown, FadeInRight } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CustomToggle } from '@/components/custom-toggle';
+import { resolveApiMediaUrl } from '@/src/api/apiConfig';
 import {
   fetchInventoryItems,
   fetchInventoryCategories,
@@ -895,7 +896,7 @@ export default function MenuManagementScreen() {
         description: item.description || '',
         price: Number(item.price),
         category: item.category?.name || 'Uncategorized',
-        image: item.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300&h=300&fit=crop',
+        image: resolveApiMediaUrl(item.image) || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300&h=300&fit=crop',
         isAvailable,
         isBestSeller: false,
         stockStatus,

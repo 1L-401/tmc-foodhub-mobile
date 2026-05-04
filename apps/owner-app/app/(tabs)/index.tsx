@@ -24,8 +24,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { fetchOwnerOrders, ownerOrderQueryKeys } from '@/services/orderService';
 import { fetchOwnerProfile } from '@/services/ownerProfileService';
-import { fetchInventoryItems, inventoryQueryKeys } from '@/services/inventoryService';
-
+import { fetchInventoryItems, inventoryQueryKeys } from '@/services/inventoryService';import { resolveApiMediaUrl } from '@/src/api/apiConfig';
 import {
   RECENT_REVIEWS,
   SALES_DATA,
@@ -351,7 +350,7 @@ export default function DashboardScreen() {
             {popularMenu.map((item) => (
               <View key={item.id} style={styles.menuRow}>
                 <Image
-                  source={{ uri: item.image || 'https://via.placeholder.com/80/F4F4F4/1A1A1A?text=No+Img' }}
+                  source={{ uri: resolveApiMediaUrl(item.image) || 'https://ui-avatars.com/api/?name=No+Img&background=F4F4F4&color=1A1A1A&size=80' }}
                   style={styles.menuImage}
                 />
                 <View style={styles.menuInfo}>
