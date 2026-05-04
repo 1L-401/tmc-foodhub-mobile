@@ -1,7 +1,9 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Dimensions,
   Image,
@@ -18,21 +20,54 @@ import Animated, { FadeInDown, FadeInRight } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CustomToggle } from '@/components/custom-toggle';
-
 import {
-  CATEGORY_OPTIONS,
-  MENU_CATEGORIES,
-  MENU_ITEMS,
-  SORT_OPTIONS,
-  type MenuCategory,
-  type MenuItem,
-  type SortOption,
-  type StockStatus,
-} from '@/constants/mock-menu-data';
+  fetchInventoryItems,
+  fetchInventoryCategories,
+  createInventoryItem,
+  updateInventoryItem,
+  deleteInventoryItem,
+  updateInventoryItemAvailability,
+  inventoryQueryKeys,
+  type InventoryMenuItem,
+  type InventoryCategory,
+  type InventoryMenuItemInput
+} from '@/services/inventoryService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_GAP = 10;
 const CARD_WIDTH = (SCREEN_WIDTH - 32 - CARD_GAP) / 2;
+
+/* ══════════════════════════════════════════════
+   Local Types & Constants
+   ══════════════════════════════════════════════ */
+export type StockStatus = 'Available' | 'Low Stock' | 'Out of Stock';
+export type SortOption = 'Popularity' | 'Price: Low to High' | 'Price: High to Low' | 'Name A-Z';
+export type MenuCategory = string;
+
+export interface MenuItem {
+  id: string; // mapped from numeric id
+  dbId: number; 
+  categoryId: number | null;
+  name: string;
+  description: string;
+  price: number;
+  category: MenuCategory;
+  image: string;
+  isAvailable: boolean;
+  isBestSeller: boolean;
+  stockStatus: StockStatus;
+  stockLevel: number;
+  rating: number;      
+  totalReviews: number; 
+  prepTime: string;    
+}
+
+const SORT_OPTIONS: SortOption[] = [
+  'Popularity',
+  'Price: Low to High',
+  'Price: High to Low',
+  'Name A-Z',
+];
 
 /* ══════════════════════════════════════════════
    Reusable Sub-Components
@@ -117,9 +152,11 @@ function SortDropdown({
 /* ─── Category Dropdown (for modals) ─── */
 function CategoryDropdown({
   selected,
+  options,
   onSelect,
 }: {
   selected: MenuCategory;
+  options: MenuCategory[];
   onSelect: (cat: MenuCategory) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -139,7 +176,7 @@ function CategoryDropdown({
 
       {open && (
         <View style={formStyles.dropdownMenu}>
-          {CATEGORY_OPTIONS.map((cat) => (
+          {options.map((cat) => (
             <Pressable
               key={cat}
               style={[
@@ -353,37 +390,43 @@ function ItemDetailModal({
 function EditItemModal({
   visible,
   item,
+  categories,
   onClose,
   onSave,
 }: {
   visible: boolean;
   item: MenuItem | null;
+  categories: { id: number; name: string }[];
   onClose: () => void;
   onSave: (updated: Partial<MenuItem>) => void;
 }) {
   const [name, setName] = useState('');
-  const [category, setCategory] = useState<MenuCategory>('Main Courses');
+  const [category, setCategory] = useState<MenuCategory>('Uncategorized');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
   const [prepTime, setPrepTime] = useState('');
   const [isAvailable, setIsAvailable] = useState(true);
 
+  const categoryOptions = useMemo(() => categories.map(c => c.name), [categories]);
+
   // Sync form with item when modal opens
   React.useEffect(() => {
     if (item && visible) {
       setName(item.name);
-      setCategory(item.category as MenuCategory);
+      setCategory(item.category || categoryOptions[0] || 'Uncategorized');
       setDescription(item.description);
       setPrice(item.price.toFixed(2));
       setPrepTime(item.prepTime);
       setIsAvailable(item.isAvailable);
     }
-  }, [item, visible]);
+  }, [item, visible, categoryOptions]);
 
   const handleSave = () => {
+    const selectedCat = categories.find(c => c.name === category);
     onSave({
       name,
       category,
+      categoryId: selectedCat?.id || null,
       description,
       price: parseFloat(price) || 0,
       prepTime,
@@ -434,6 +477,7 @@ function EditItemModal({
                   <Text style={formStyles.label}>Category</Text>
                   <CategoryDropdown
                     selected={category}
+                    options={categoryOptions}
                     onSelect={setCategory}
                   />
                 </View>
@@ -538,23 +582,33 @@ function EditItemModal({
    ══════════════════════════════════════════════ */
 function AddItemModal({
   visible,
+  categories,
   onClose,
   onSave,
 }: {
   visible: boolean;
+  categories: { id: number; name: string }[];
   onClose: () => void;
   onSave: (newItem: Partial<MenuItem>) => void;
 }) {
   const [name, setName] = useState('');
-  const [category, setCategory] = useState<MenuCategory>('Main Courses');
+  const [category, setCategory] = useState<MenuCategory>('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
   const [prepTime, setPrepTime] = useState('');
   const [isAvailable, setIsAvailable] = useState(true);
 
+  const categoryOptions = useMemo(() => categories.map(c => c.name), [categories]);
+
+  React.useEffect(() => {
+    if (visible && categoryOptions.length > 0 && !category) {
+      setCategory(categoryOptions[0]);
+    }
+  }, [visible, categoryOptions]);
+
   const resetForm = () => {
     setName('');
-    setCategory('Main Courses');
+    setCategory(categoryOptions[0] || '');
     setDescription('');
     setPrice('');
     setPrepTime('');
@@ -571,9 +625,12 @@ function AddItemModal({
       return;
     }
 
+    const selectedCat = categories.find(c => c.name === category);
+
     onSave({
       name,
       category,
+      categoryId: selectedCat?.id || null,
       description,
       price: parseFloat(price),
       prepTime: prepTime || '15-20 mins',
@@ -646,6 +703,7 @@ function AddItemModal({
                   <Text style={formStyles.label}>Category</Text>
                   <CategoryDropdown
                     selected={category}
+                    options={categoryOptions}
                     onSelect={setCategory}
                   />
                 </View>
@@ -749,10 +807,108 @@ function AddItemModal({
    Main Screen: Menu Management
    ══════════════════════════════════════════════ */
 export default function MenuManagementScreen() {
+  const queryClient = useQueryClient();
+
+  /* ─── Queries ─── */
+  const { data: rawCategories = [], isLoading: isLoadingCategories } = useQuery<InventoryCategory[]>({
+    queryKey: inventoryQueryKeys.categories,
+    queryFn: fetchInventoryCategories,
+  });
+
+  const { data: rawItems = [], isLoading: isLoadingItems } = useQuery<InventoryMenuItem[]>({
+    queryKey: inventoryQueryKeys.items,
+    queryFn: fetchInventoryItems,
+  });
+
+  /* ─── Mutations ─── */
+  const toggleAvailMutation = useMutation<unknown, unknown, { id: number; available: boolean }>({
+    mutationFn: ({ id, available }) =>
+      updateInventoryItemAvailability(id, available),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: inventoryQueryKeys.items });
+    },
+    onError: () => {
+      Alert.alert('Error', 'Failed to update availability');
+    },
+  });
+
+  const createItemMutation = useMutation<unknown, unknown, InventoryMenuItemInput>({
+    mutationFn: createInventoryItem,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: inventoryQueryKeys.items });
+    },
+    onError: () => {
+      Alert.alert('Error', 'Failed to add item');
+    },
+  });
+
+  const updateItemMutation = useMutation<unknown, unknown, { id: number; payload: any }>({
+    mutationFn: ({ id, payload }) =>
+      updateInventoryItem(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: inventoryQueryKeys.items });
+    },
+    onError: () => {
+      Alert.alert('Error', 'Failed to update item');
+    },
+  });
+
+  const deleteItemMutation = useMutation<unknown, unknown, number>({
+    mutationFn: deleteInventoryItem,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: inventoryQueryKeys.items });
+      setShowDetailModal(false);
+      setSelectedItem(null);
+    },
+    onError: () => {
+      Alert.alert('Error', 'Failed to delete item');
+    },
+  });
+
+  /* ─── Derived Data ─── */
+  const CATEGORY_OPTIONS = useMemo(() => {
+    return rawCategories;
+  }, [rawCategories]);
+
+  const MENU_CATEGORIES = useMemo(() => {
+    return [
+      { key: 'All Items', label: 'All Items' },
+      ...rawCategories.map(c => ({ key: c.name, label: c.name }))
+    ];
+  }, [rawCategories]);
+
+  const menuItems = useMemo<MenuItem[]>(() => {
+    return rawItems.map(item => {
+      const isAvailable = item.available ?? false;
+      const stockLevel = item.stock_level ?? 0;
+      let stockStatus: StockStatus = 'Available';
+      
+      if (!isAvailable || stockLevel === 0) stockStatus = 'Out of Stock';
+      else if (stockLevel < (item.min_threshold || 10)) stockStatus = 'Low Stock';
+
+      // For ratings and prep time, we can mock since they are not in the db yet
+      return {
+        id: item.id.toString(),
+        dbId: item.id,
+        categoryId: item.category_id,
+        name: item.title,
+        description: item.description || '',
+        price: Number(item.price),
+        category: item.category?.name || 'Uncategorized',
+        image: item.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300&h=300&fit=crop',
+        isAvailable,
+        isBestSeller: false,
+        stockStatus,
+        stockLevel,
+        rating: 4.5,
+        totalReviews: 120,
+        prepTime: '15-20 mins',
+      };
+    });
+  }, [rawItems]);
+
   /* ─── State ─── */
-  const [menuItems, setMenuItems] = useState<MenuItem[]>(MENU_ITEMS);
-  const [activeCategory, setActiveCategory] =
-    useState<MenuCategory>('All Items');
+  const [activeCategory, setActiveCategory] = useState<MenuCategory>('All Items');
   const [sortBy, setSortBy] = useState<SortOption>('Popularity');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -814,23 +970,12 @@ export default function MenuManagementScreen() {
   /* ─── Handlers ─── */
   const handleToggleAvailability = useCallback(
     (id: string, value: boolean) => {
-      setMenuItems((prev) =>
-        prev.map((item) =>
-          item.id === id
-            ? {
-                ...item,
-                isAvailable: value,
-                stockStatus: value
-                  ? item.stockStatus === 'Out of Stock'
-                    ? 'Available'
-                    : item.stockStatus
-                  : 'Out of Stock',
-              }
-            : item,
-        ),
-      );
+      const item = menuItems.find((i) => i.id === id);
+      if (item) {
+        toggleAvailMutation.mutate({ id: item.dbId, available: value });
+      }
     },
-    [],
+    [menuItems, toggleAvailMutation],
   );
 
   const handleOpenDetail = useCallback((item: MenuItem) => {
@@ -854,48 +999,42 @@ export default function MenuManagementScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
-            setMenuItems((prev) =>
-              prev.filter((item) => item.id !== selectedItem.id),
-            );
-            setShowDetailModal(false);
-            setSelectedItem(null);
+            deleteItemMutation.mutate(selectedItem.dbId);
           },
         },
       ],
     );
-  }, [selectedItem]);
+  }, [selectedItem, deleteItemMutation]);
 
   const handleSaveEdit = useCallback(
     (updated: Partial<MenuItem>) => {
       if (!selectedItem) return;
-      setMenuItems((prev) =>
-        prev.map((item) =>
-          item.id === selectedItem.id ? { ...item, ...updated } : item,
-        ),
-      );
+      updateItemMutation.mutate({
+        id: selectedItem.dbId,
+        payload: {
+          title: updated.name,
+          description: updated.description,
+          price: updated.price,
+          category_id: updated.categoryId,
+          available: updated.isAvailable,
+        }
+      });
     },
-    [selectedItem],
+    [selectedItem, updateItemMutation],
   );
 
   const handleAddItem = useCallback((newItem: Partial<MenuItem>) => {
-    const id = Date.now().toString();
-    const fullItem: MenuItem = {
-      id,
-      name: newItem.name || 'New Item',
+    createItemMutation.mutate({
+      title: newItem.name || 'New Item',
       description: newItem.description || '',
       price: newItem.price || 0,
-      category: (newItem.category as MenuCategory) || 'Main Courses',
-      image:
-        'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300&h=300&fit=crop',
-      isAvailable: newItem.isAvailable ?? true,
-      isBestSeller: false,
-      stockStatus: 'Available',
-      rating: 0,
-      totalReviews: 0,
-      prepTime: newItem.prepTime || '15-20 mins',
-    };
-    setMenuItems((prev) => [fullItem, ...prev]);
-  }, []);
+      category_id: newItem.categoryId || null,
+      available: newItem.isAvailable ?? true,
+      stock_level: 10, // Default mock stock when adding a new item
+    });
+  }, [createItemMutation]);
+
+  const isLoading = isLoadingItems || isLoadingCategories;
 
   /* ─── Render ─── */
   return (
@@ -1047,7 +1186,11 @@ export default function MenuManagementScreen() {
           </Animated.View>
 
           {/* ── Menu Grid / List ── */}
-          {filteredItems.length > 0 ? (
+          {isLoading ? (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 40 }}>
+              <ActivityIndicator size="large" color="#AC1D10" />
+            </View>
+          ) : filteredItems.length > 0 ? (
             viewMode === 'grid' ? (
               <View style={styles.grid}>
                 {filteredItems.reduce<MenuItem[][]>((rows, item, i) => {
@@ -1148,6 +1291,7 @@ export default function MenuManagementScreen() {
       <EditItemModal
         visible={showEditModal}
         item={selectedItem}
+        categories={CATEGORY_OPTIONS}
         onClose={() => {
           setShowEditModal(false);
           setSelectedItem(null);
@@ -1157,6 +1301,7 @@ export default function MenuManagementScreen() {
 
       <AddItemModal
         visible={showAddModal}
+        categories={CATEGORY_OPTIONS}
         onClose={() => setShowAddModal(false)}
         onSave={handleAddItem}
       />
