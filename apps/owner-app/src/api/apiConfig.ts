@@ -18,6 +18,13 @@ export const buildApiUrl = (endpoint: string) => {
   return `${API_BASE_URL}${normalizedEndpoint}`;
 };
 
+const getPublicBaseUrl = () => {
+  if (!API_PUBLIC_BASE_URL || API_PUBLIC_BASE_URL.includes('localhost:8081')) {
+    return 'https://foodhub.tmc-innovations.com';
+  }
+  return API_PUBLIC_BASE_URL;
+};
+
 const stripManagedMediaPrefix = (path: string) => {
   let normalizedPath = path.replace(/\\/g, '/').trim();
 
@@ -65,7 +72,7 @@ const isManagedMediaPath = (path: string) => {
 
 const resolveManagedMediaUrl = (path: string) => {
   const encodedPath = encodeManagedMediaPath(path);
-  return encodedPath ? `${API_PUBLIC_BASE_URL}/api/media/${encodedPath}` : '';
+  return encodedPath ? `${getPublicBaseUrl()}/api/media/${encodedPath}` : '';
 };
 
 export const resolveApiMediaUrl = (path?: string | null) => {
@@ -97,7 +104,7 @@ export const resolveApiMediaUrl = (path?: string | null) => {
       const isLocalhost = parsedUrl.hostname === 'localhost' || parsedUrl.hostname === '127.0.0.1';
 
       if (isLocalhost) {
-        return `${API_PUBLIC_BASE_URL}${parsedUrl.pathname}${parsedUrl.search}${parsedUrl.hash}`;
+        return `${getPublicBaseUrl()}${parsedUrl.pathname}${parsedUrl.search}${parsedUrl.hash}`;
       }
     } catch {
       return normalizedPath;
@@ -111,8 +118,8 @@ export const resolveApiMediaUrl = (path?: string | null) => {
   }
 
   if (normalizedPath.startsWith('/')) {
-    return `${API_PUBLIC_BASE_URL}${normalizedPath}`;
+    return `${getPublicBaseUrl()}${normalizedPath}`;
   }
 
-  return `${API_PUBLIC_BASE_URL}/${normalizedPath}`;
+  return `${getPublicBaseUrl()}/${normalizedPath}`;
 };

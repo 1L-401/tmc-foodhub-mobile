@@ -1,6 +1,7 @@
+import { useQuery } from '@tanstack/react-query';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import {
   Image,
   Pressable,
@@ -21,24 +22,22 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import {
-  POPULAR_MENU,
-  RECENT_ORDERS,
-  RECENT_REVIEWS,
-  RESTAURANT_NAME,
-  SALES_DATA,
-  STATS,
-} from '@/constants/mock-dashboard-data';
+import { fetchOwnerOrders, ownerOrderQueryKeys } from '@/services/orderService';
+import { fetchOwnerProfile } from '@/services/ownerProfileService';
+import { fetchInventoryItems, inventoryQueryKeys } from '@/services/inventoryService';
+import { useAuth } from '@/context/AuthContext';
+import { useOwnerReviews } from '@/services/reviewService';
+import { resolveApiMediaUrl } from '@/src/api/apiConfig';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 /* ─── Simple Bar Chart ─── */
-function MiniBarChart() {
-  const maxVal = Math.max(...SALES_DATA.map((d) => d.value));
+function MiniBarChart({ data = [] }: { data?: { label: string; value: number }[] }) {
+  const maxVal = Math.max(...data.map((d) => d.value), 1);
   return (
     <View style={chartStyles.container}>
       <View style={chartStyles.bars}>
-        {SALES_DATA.map((d, i) => {
+        {data.map((d, i) => {
           const pct = (d.value / maxVal) * 100;
           return (
             <Animated.View
@@ -50,7 +49,7 @@ function MiniBarChart() {
                   style={[
                     chartStyles.barFill,
                     { height: `${pct}%` },
-                    i === SALES_DATA.length - 3 && chartStyles.barHighlight,
+                    i === data.length - 1 && chartStyles.barHighlight,
                   ]}
                 />
               </View>
@@ -61,9 +60,9 @@ function MiniBarChart() {
       </View>
       {/* Y labels */}
       <View style={chartStyles.yLabels}>
-        <Text style={chartStyles.yText}>$1k</Text>
-        <Text style={chartStyles.yText}>$0.5k</Text>
-        <Text style={chartStyles.yText}>$0</Text>
+        <Text style={chartStyles.yText}>₱{Math.round(maxVal)}</Text>
+        <Text style={chartStyles.yText}>₱{Math.round(maxVal / 2)}</Text>
+        <Text style={chartStyles.yText}>₱0</Text>
       </View>
     </View>
   );
@@ -132,6 +131,76 @@ export default function DashboardScreen() {
   const headerScale = useSharedValue(0.95);
   const headerOpacity = useSharedValue(0);
 
+  const { user } = useAuth();
+
+  const { data: profile } = useQuery({
+    queryKey: ['owner', 'profile'],
+    queryFn: () => fetchOwnerProfile(),
+  });
+
+  const { data: reviewsResponse, isLoading: isReviewsLoading } = useOwnerReviews(user?.id);
+  const recentReviews = useMemo(() => {
+    return reviewsResponse?.reviews?.slice(0, 3) || [];
+  }, [reviewsResponse]);
+
+  const { data: orders = [], isLoading: isOrdersLoading } = useQuery({
+    queryKey: ownerOrderQueryKeys.all,
+    queryFn: fetchOwnerOrders,
+    refetchInterval: 1000 * 30, // Fallback polling before WebSockets
+  });
+
+  const { data: inventoryItems = [], isLoading: isInventoryLoading } = useQuery({
+    queryKey: inventoryQueryKeys.items,
+    queryFn: fetchInventoryItems,
+  });
+
+  const stats = useMemo(() => {
+    const today = new Date().toDateString();
+    const todaysOrders = orders.filter(o => new Date(o.placedAt).toDateString() === today);
+    const activeOrders = orders.filter(o => ['Pending', 'Order Confirmed', 'Out for Delivery'].includes(o.status));
+
+    return {
+      todaysOrders: todaysOrders.length,
+      todaysOrdersGrowth: 'Live data',
+      activeOrders: activeOrders.length,
+      activeOrdersGrowth: 'Live data'
+    };
+  }, [orders]);
+
+  const recentOrders = useMemo(() => {
+    return orders.slice(0, 3);
+  }, [orders]);
+
+  const popularMenu = useMemo(() => {
+    return [...inventoryItems]
+      .sort((a, b) => (a.stock_level ?? 0) - (b.stock_level ?? 0))
+      .slice(0, 3);
+  }, [inventoryItems]);
+
+  const salesData = useMemo(() => {
+    const result: { label: string; value: number; dateString: string }[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const label = d.toLocaleDateString('en-US', { weekday: 'short' });
+      result.push({ label, value: 0, dateString: d.toDateString() });
+    }
+
+    if (!orders || orders.length === 0) return result.map(({ label, value }) => ({ label, value }));
+
+    orders.forEach((o) => {
+      if (['Delivered', 'Out for Delivery', 'Order Confirmed'].includes(o.status)) {
+        const orderDate = new Date(o.placedAt).toDateString();
+        const bucket = result.find((r) => r.dateString === orderDate);
+        if (bucket) {
+          bucket.value += o.total;
+        }
+      }
+    });
+
+    return result.map(({ label, value }) => ({ label, value }));
+  }, [orders]);
+
   useEffect(() => {
     headerOpacity.value = withTiming(1, { duration: 600 });
     headerScale.value = withDelay(100, withSpring(1, { damping: 12 }));
@@ -193,7 +262,7 @@ export default function DashboardScreen() {
           <Animated.View entering={FadeInDown.delay(250).duration(450)}>
             <Text style={styles.dashboardTitle}>Dashboard</Text>
             <Text style={styles.welcomeText}>
-              Welcome back, {RESTAURANT_NAME}
+              Welcome back{profile?.name ? `, ${profile.name}` : ''}
             </Text>
           </Animated.View>
 
@@ -210,9 +279,9 @@ export default function DashboardScreen() {
                 />
               </View>
               <Text style={styles.statLabel}>Today's Orders</Text>
-              <Text style={styles.statValue}>{STATS.todaysOrders}</Text>
+              <Text style={styles.statValue}>{stats.todaysOrders}</Text>
               <Text style={styles.statGrowth}>
-                📈 {STATS.todaysOrdersGrowth}
+                📈 {stats.todaysOrdersGrowth}
               </Text>
             </View>
 
@@ -225,9 +294,9 @@ export default function DashboardScreen() {
                 />
               </View>
               <Text style={styles.statLabel}>Active Orders</Text>
-              <Text style={styles.statValue}>{STATS.activeOrders}</Text>
+              <Text style={styles.statValue}>{stats.activeOrders}</Text>
               <Text style={[styles.statGrowth, { color: '#059669' }]}>
-                📈 {STATS.activeOrdersGrowth}
+                📈 {stats.activeOrdersGrowth}
               </Text>
             </View>
           </Animated.View>
@@ -236,12 +305,13 @@ export default function DashboardScreen() {
           <Animated.View entering={FadeInDown.delay(450).duration(450)}>
             <View style={styles.sectionRow}>
               <Text style={styles.sectionTitle}>Recent Orders</Text>
-              <Pressable>
+              <Pressable
+                onPress={() => router.push('/order-details' as any)}>
                 <Text style={styles.viewAll}>View All Orders</Text>
               </Pressable>
             </View>
 
-            {RECENT_ORDERS.map((order, i) => (
+            {recentOrders.map((order, i) => (
               <AnimatedPressable
                 key={order.id}
                 entering={FadeInRight.delay(500 + i * 100).duration(400)}
@@ -254,49 +324,55 @@ export default function DashboardScreen() {
                 }>
                 <View style={styles.orderTop}>
                   <Text style={styles.orderNumber}>{order.orderNumber}</Text>
-                  <StatusBadge status={order.status} />
+                  <StatusBadge status={order.status.toLowerCase()} />
                 </View>
                 <Text style={styles.orderCustomer}>{order.customerName}</Text>
-                <Text style={styles.orderItems}>{order.items}</Text>
+                <Text style={styles.orderItems}>{order.itemsSummary || 'No items'}</Text>
                 <Text style={styles.orderTotal}>
-                  ${order.total.toFixed(2)}
+                  ₱{order.total.toFixed(2)}
                 </Text>
                 <View style={styles.orderBottom}>
                   <Text style={styles.orderMeta}>
-                    {order.paymentMethod} • {order.timeAgo}
+                    {order.paymentMethod.toUpperCase()} • {order.timeAgo}
                   </Text>
-                  <ActionButton label="" status={order.status} />
+                  <ActionButton label="" status={order.status.toLowerCase().replace(' ', '_')} />
                 </View>
               </AnimatedPressable>
             ))}
+            {recentOrders.length === 0 && !isOrdersLoading && (
+               <Text style={{textAlign: 'center', color: '#999', marginTop: 10}}>No recent orders.</Text>
+            )}
           </Animated.View>
 
           {/* ── Popular Menu ── */}
           <Animated.View entering={FadeInDown.delay(700).duration(450)}>
             <View style={styles.sectionRow}>
               <Text style={styles.sectionTitle}>Popular Menu</Text>
-              <Pressable>
+              <Pressable onPress={() => router.push('/(tabs)/menu')}>
                 <Text style={styles.viewAll}>View All</Text>
               </Pressable>
             </View>
 
-            {POPULAR_MENU.map((item) => (
+            {popularMenu.map((item) => (
               <View key={item.id} style={styles.menuRow}>
                 <Image
-                  source={{ uri: item.image }}
+                  source={{ uri: resolveApiMediaUrl(item.image) || 'https://ui-avatars.com/api/?name=No+Img&background=F4F4F4&color=1A1A1A&size=80' }}
                   style={styles.menuImage}
                 />
                 <View style={styles.menuInfo}>
-                  <Text style={styles.menuName}>{item.name}</Text>
+                  <Text style={styles.menuName}>{item.title}</Text>
                   <Text style={styles.menuOrders}>
-                    {item.ordersThisWeek} orders this week
+                    Stock: {item.stock_level}
                   </Text>
                 </View>
                 <Text style={styles.menuPrice}>
-                  ${item.price.toFixed(2)}
+                  ₱{Number(item.price).toFixed(2)}
                 </Text>
               </View>
             ))}
+            {popularMenu.length === 0 && !isInventoryLoading && (
+               <Text style={{textAlign: 'center', color: '#999', marginTop: 10}}>No menu items available.</Text>
+            )}
           </Animated.View>
 
           {/* ── Sales Revenue ── */}
@@ -314,7 +390,7 @@ export default function DashboardScreen() {
             </View>
 
             <View style={styles.chartCard}>
-              <MiniBarChart />
+              <MiniBarChart data={salesData} />
             </View>
           </Animated.View>
 
@@ -327,21 +403,23 @@ export default function DashboardScreen() {
               </Pressable>
             </View>
 
-            {RECENT_REVIEWS.map((review) => (
+            {recentReviews.map((review) => (
               <View key={review.id} style={styles.reviewCard}>
                 <View style={styles.reviewTop}>
-                  <Image
-                    source={{ uri: review.avatar }}
-                    style={styles.reviewAvatar}
-                  />
+                  <View style={[styles.reviewAvatar, { alignItems: 'center', justifyContent: 'center' }]}>
+                    <Text style={{ fontSize: 14, color: '#999', fontWeight: 'bold' }}>{review.customer_initials}</Text>
+                  </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.reviewName}>{review.name}</Text>
+                    <Text style={styles.reviewName}>{review.customer_name}</Text>
                   </View>
                   <StarRating rating={review.rating} />
                 </View>
                 <Text style={styles.reviewText}>{review.review}</Text>
               </View>
             ))}
+            {recentReviews.length === 0 && !isReviewsLoading && (
+               <Text style={{textAlign: 'center', color: '#999', marginTop: 10}}>No recent reviews.</Text>
+            )}
           </Animated.View>
 
           <View style={{ height: 100 }} />

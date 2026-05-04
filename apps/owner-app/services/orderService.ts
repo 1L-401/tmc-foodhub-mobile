@@ -173,23 +173,13 @@ const buildOrderNumber = (restaurantName: string, id: number | string) =>
   `${getOrderPrefix(restaurantName)}-${String(id).padStart(5, '0')}`;
 
 const normalizeStatus = (status: unknown): OwnerOrderStatus => {
-  const rawStatus = toStringValue(status);
+  const rawStatus = toStringValue(status).toLowerCase();
 
-  if (rawStatus === 'Order Placed') return 'Pending';
-  if (rawStatus === 'Being Prepared') return 'Order Confirmed';
-  if (rawStatus === 'Picked Up') return 'Out for Delivery';
-  if (rawStatus === 'Preparing') return 'Order Confirmed';
-  if (rawStatus === 'Delivering') return 'Out for Delivery';
-
-  if (
-    rawStatus === 'Pending' ||
-    rawStatus === 'Order Confirmed' ||
-    rawStatus === 'Out for Delivery' ||
-    rawStatus === 'Delivered' ||
-    rawStatus === 'Cancelled'
-  ) {
-    return rawStatus;
-  }
+  if (rawStatus === 'order placed' || rawStatus === 'pending') return 'Pending';
+  if (rawStatus === 'being prepared' || rawStatus === 'preparing' || rawStatus === 'order confirmed' || rawStatus === 'confirmed' || rawStatus === 'accepted') return 'Order Confirmed';
+  if (rawStatus === 'picked up' || rawStatus === 'delivering' || rawStatus === 'out for delivery' || rawStatus === 'out_for_delivery') return 'Out for Delivery';
+  if (rawStatus === 'delivered' || rawStatus === 'completed' || rawStatus === 'done') return 'Delivered';
+  if (rawStatus === 'cancelled' || rawStatus === 'canceled') return 'Cancelled';
 
   return 'Pending';
 };

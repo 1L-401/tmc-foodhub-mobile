@@ -21,13 +21,9 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import {
-  EARNINGS_BALANCES,
-  EARNINGS_TRENDS_CHART,
-  PAYOUT_HISTORY,
-  REVENUE_BREAKDOWN,
-  TOP_SELLING_BY_REVENUE,
-} from '@/constants/mock-earnings-data';
+import { useQuery } from '@tanstack/react-query';
+import { fetchOwnerOrders, ownerOrderQueryKeys, type OwnerOrder } from '@/services/orderService';
+import { PAYOUT_HISTORY } from '@/constants/mock-earnings-data';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -54,44 +50,43 @@ function SegmentedControl({ active, onChange }: { active: string; onChange: (v: 
 }
 
 /* ─── Revenue Trends Bar Chart ─── */
-function RevenueChart() {
-  const maxVal = Math.max(...EARNINGS_TRENDS_CHART.map((d) => d.value));
+function RevenueChart({ data = [] }: { data: { label: string; value: number; dateString: string; ordersCount: number }[] }) {
+  const maxVal = Math.max(...data.map((d) => d.value), 1);
+  const highestIndex = data.findIndex(d => d.value === Math.max(...data.map(x => x.value)));
 
   return (
     <View style={chartStyles.container}>
-      {/* Tooltip (Static positioning for mockup over highest bar) */}
-      <View style={chartStyles.tooltipContainer}>
-        <View style={chartStyles.tooltip}>
-          <Text style={chartStyles.tooltipDate}>Feb 23, 2026</Text>
-          <View style={chartStyles.tooltipRow}>
-            <Text style={chartStyles.tooltipLabel}>Revenue</Text>
-            <Text style={chartStyles.tooltipValue}>₱5,600</Text>
+      {/* Tooltip over highest bar */}
+      {data.length > 0 && highestIndex >= 0 && data[highestIndex].value > 0 && (
+        <View style={chartStyles.tooltipContainer}>
+          <View style={chartStyles.tooltip}>
+            <Text style={chartStyles.tooltipDate}>{data[highestIndex].dateString}</Text>
+            <View style={chartStyles.tooltipRow}>
+              <Text style={chartStyles.tooltipLabel}>Revenue</Text>
+              <Text style={chartStyles.tooltipValue}>₱{data[highestIndex].value.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
+            </View>
+            <View style={chartStyles.tooltipRow}>
+              <Text style={chartStyles.tooltipLabel}>Orders</Text>
+              <Text style={chartStyles.tooltipValue}>{data[highestIndex].ordersCount}</Text>
+            </View>
           </View>
-          <View style={chartStyles.tooltipRow}>
-            <Text style={chartStyles.tooltipLabel}>Orders</Text>
-            <Text style={chartStyles.tooltipValue}>42</Text>
-          </View>
-          <View style={chartStyles.tooltipGrowthPill}>
-            <MaterialCommunityIcons name="trending-up" size={10} color="#16A34A" />
-            <Text style={chartStyles.tooltipGrowthText}>+12% vs last week</Text>
-          </View>
+          <View style={chartStyles.tooltipTriangle} />
         </View>
-        <View style={chartStyles.tooltipTriangle} />
-      </View>
+      )}
 
       {/* Bars Area */}
       <View style={chartStyles.chartArea}>
         {/* Y Axis labels absolute positioned behind */}
         <View style={chartStyles.yAxisWrap}>
-          <Text style={chartStyles.yText}>15k</Text>
-          <Text style={chartStyles.yText}>10k</Text>
-          <Text style={chartStyles.yText}>5k</Text>
+          <Text style={chartStyles.yText}>{(maxVal).toFixed(0)}</Text>
+          <Text style={chartStyles.yText}>{(maxVal * 0.66).toFixed(0)}</Text>
+          <Text style={chartStyles.yText}>{(maxVal * 0.33).toFixed(0)}</Text>
           <Text style={chartStyles.yText}>0</Text>
         </View>
 
         <View style={chartStyles.bars}>
-          {EARNINGS_TRENDS_CHART.map((d, i) => {
-            const isHighest = d.value === maxVal;
+          {data.map((d, i) => {
+            const isHighest = i === highestIndex && d.value > 0;
             const pct = (d.value / maxVal) * 100;
             return (
               <Animated.View
@@ -108,7 +103,7 @@ function RevenueChart() {
                   />
                 </View>
                 {/* Simplify x-axis labels */}
-                {i === 1 || i === 5 || i === 9 || i === EARNINGS_TRENDS_CHART.length - 1 ? (
+                {i === 0 || i === Math.floor(data.length / 2) || i === data.length - 1 ? (
                   <Text style={chartStyles.barLabel}>{d.label}</Text>
                 ) : (
                   <Text style={chartStyles.barLabel} />
@@ -127,6 +122,103 @@ export default function EarningsScreen() {
   const [activeSegment, setActiveSegment] = useState('Today');
   const headerScale = useSharedValue(0.95);
   const headerOpacity = useSharedValue(0);
+
+  const { data: orders = [] } = useQuery({
+    queryKey: ownerOrderQueryKeys.all,
+    queryFn: fetchOwnerOrders,
+  });
+
+  const liveData = React.useMemo(() => {
+    let daysToFilter = 1;
+    if (activeSegment === '7 days') daysToFilter = 7;
+    if (activeSegment === '30 days') daysToFilter = 30;
+    if (activeSegment === 'Custom') daysToFilter = 30;
+
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysToFilter);
+
+    let netEarnings = 0;
+    let pendingClearance = 0;
+    let availableBalance = 0;
+    let foodSales = 0;
+    let deliveryFees = 0;
+    let discountsApplied = 0;
+    
+    // Revenue Trends Chart
+    const trends: { label: string; value: number; dateString: string; ordersCount: number }[] = [];
+    for (let i = daysToFilter - 1; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const label = daysToFilter <= 7 ? d.toLocaleDateString('en-US', { weekday: 'short' }) : d.getDate().toString();
+      trends.push({ label, value: 0, dateString: d.toDateString(), ordersCount: 0 });
+    }
+
+    // Top Selling By Revenue
+    const topItemsMap: Record<string, { name: string; revenue: number; image: string | null }> = {};
+
+    orders.forEach((o) => {
+      const isCompleted = ['Delivered', 'Out for Delivery', 'Order Confirmed'].includes(o.status);
+      const isRecent = new Date(o.placedAt) >= cutoffDate;
+
+      if (isCompleted) {
+         if (isRecent) {
+           foodSales += o.subtotal || 0;
+           deliveryFees += o.deliveryFee || 0;
+           discountsApplied += o.discount || 0;
+           
+           const orderDate = new Date(o.placedAt).toDateString();
+           const bucket = trends.find((r) => r.dateString === orderDate);
+           if (bucket) {
+             bucket.value += o.total;
+             bucket.ordersCount += 1;
+           }
+
+           o.items.forEach(item => {
+             if (!topItemsMap[item.name]) {
+               topItemsMap[item.name] = { name: item.name, revenue: 0, image: item.image };
+             }
+             topItemsMap[item.name].revenue += item.price * item.quantity;
+           });
+         }
+
+         netEarnings += o.total;
+         if (o.paymentMethod !== 'cod' && o.paymentStatus === 'paid') {
+           availableBalance += o.total; // Simulation of available online payments
+         }
+      }
+
+      if (o.paymentStatus === 'pending_verification' || o.paymentStatus === 'awaiting_confirmation') {
+         pendingClearance += o.total;
+      }
+    });
+
+    const platformFees = (foodSales + deliveryFees) * 0.1; // 10% mock platform fee
+
+    const balances = [
+      { id: '1', label: 'Available Balance', value: `₱${availableBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, growth: 'Online payments', icon: 'wallet-outline' },
+      { id: '2', label: 'Net Earnings', value: `₱${netEarnings.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, growth: 'Lifetime', icon: 'chart-line' },
+      { id: '3', label: 'Pending Clearance', value: `₱${pendingClearance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, growth: 'Processing', icon: 'clock-outline' },
+    ];
+
+    const breakdown = [
+      { id: '1', label: 'Food Sales', value: `₱${foodSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, isNegative: false, isBold: true },
+      { id: '2', label: 'Delivery Fees', value: `₱${deliveryFees.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, isNegative: false, isBold: false },
+      { id: '3', label: 'Discounts Applied', value: `-₱${discountsApplied.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, isNegative: true, isBold: false },
+      { id: '4', label: 'Platform Fees (10%)', value: `-₱${platformFees.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, isNegative: true, isBold: false },
+    ];
+
+    const topItemsArr = Object.values(topItemsMap).sort((a, b) => b.revenue - a.revenue).slice(0, 4);
+    const maxItemRev = Math.max(...topItemsArr.map(i => i.revenue), 1);
+    const topItems = topItemsArr.map((item, i) => ({
+      id: String(i),
+      name: item.name,
+      revenue: `₱${item.revenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+      image: item.image || 'https://ui-avatars.com/api/?name=Item&background=F4F4F4&color=1A1A1A',
+      progress: item.revenue / maxItemRev,
+    }));
+
+    return { balances, breakdown, trends, topItems };
+  }, [orders, activeSegment]);
 
   useEffect(() => {
     headerOpacity.value = withTiming(1, { duration: 600 });
@@ -199,7 +291,7 @@ export default function EarningsScreen() {
               contentContainerStyle={styles.balancesScroll}
               snapToInterval={172}
               decelerationRate="fast">
-              {EARNINGS_BALANCES.map((card, i) => (
+              {liveData.balances.map((card, i) => (
                 <View key={card.id} style={styles.balanceCard}>
                   <View style={styles.balanceCardHeader}>
                     <View style={styles.balanceIconWrap}>
@@ -220,7 +312,7 @@ export default function EarningsScreen() {
           </Animated.View>
 
           <Animated.View entering={FadeInDown.delay(400).duration(450)} style={styles.breakdownGrid}>
-            {REVENUE_BREAKDOWN.map((item, i) => (
+            {liveData.breakdown.map((item, i) => (
               <View key={item.id} style={styles.breakdownCard}>
                 <Text style={styles.breakdownLabel}>{item.label}</Text>
                 <Text
@@ -245,7 +337,7 @@ export default function EarningsScreen() {
               </Pressable>
             </View>
 
-            <RevenueChart />
+            <RevenueChart data={liveData.trends} />
           </Animated.View>
 
           {/* Top Selling Items by Revenue */}
@@ -258,7 +350,7 @@ export default function EarningsScreen() {
               </Pressable>
             </View>
 
-            {TOP_SELLING_BY_REVENUE.map((item, i) => (
+            {liveData.topItems.length > 0 ? liveData.topItems.map((item, i) => (
               <View key={item.id} style={styles.topItemRow}>
                 <Image source={{ uri: item.image }} style={styles.topItemImage} />
                 <View style={styles.topItemInfo}>
@@ -274,7 +366,7 @@ export default function EarningsScreen() {
                   </View>
                 </View>
               </View>
-            ))}
+            )) : <Text style={{ color: '#888', textAlign: 'center', marginTop: 10 }}>No items sold yet.</Text>}
           </Animated.View>
 
           {/* Payout History */}
