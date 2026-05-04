@@ -58,22 +58,9 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="customers"
+        name="profile"
         options={{
-          title: 'Customers',
-          tabBarIcon: ({ color, focused }) => (
-            <MaterialCommunityIcons
-              name={focused ? 'account-group' : 'account-group-outline'}
-              size={24}
-              color={color}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="restaurants"
-        options={{
-          title: 'Restaurants',
+          title: 'Profile',
           tabBarIcon: ({ color, focused }) => (
             <MaterialCommunityIcons
               name={focused ? 'store' : 'store-outline'}
