@@ -13,32 +13,9 @@ import {
 import Animated, { FadeInDown, FadeInRight } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-/* ─── Mock Data ─── */
-const REVIEWS = [
-  {
-    id: '1',
-    name: 'Maria L.',
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop',
-    rating: 5,
-    orderInfo: 'Order #TMC-8821 • 2 hours ago',
-    items: ['Lumpiang Shanghai'],
-    text: 'The food arrived hot and the portions were great for the price. The adobo was perfectly seasoned, just like home cooking. I also love the Lumpiang Shanghai. It was crispy and delicious. Highly recommended for busy workdays! P240 well spent.',
-    image: 'https://images.unsplash.com/photo-1288046425391-443b784ab753?w=200&h=200&fit=crop', // Mock food img
-    helpfulCount: 8,
-    isReplyingInitial: false,
-  },
-  {
-    id: '2',
-    name: 'James T.',
-    avatar: 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=100&h=100&fit=crop',
-    rating: 5,
-    orderInfo: 'Order #TMC-8794 • 4 hours ago',
-    items: ['Grilled Steak', 'Leche Flan'],
-    text: 'Lacks a bit of salt but the meat was very tender. The Leche Flan is amazing though. Will definitely order again soon.',
-    helpfulCount: 19,
-    isReplyingInitial: false,
-  },
-];
+import { useAuth } from '@/context/AuthContext';
+import { useOwnerReviews, type ReviewItem } from '@/services/reviewService';
+import { resolveApiMediaUrl } from '@/src/api/apiConfig';
 
 /* ─── Shared Components ─── */
 function StarRating({ rating, size = 12 }: { rating: number; size?: number }) {
@@ -82,48 +59,56 @@ function StatCard({
 }
 
 /* ─── Review Card ─── */
-function ReviewCard({ review, index }: { review: typeof REVIEWS[0]; index: number }) {
-  const [isReplying, setIsReplying] = useState(review.isReplyingInitial);
-  const [replyText, setReplyText] = useState('');
+function ReviewCard({ review, index }: { review: ReviewItem; index: number }) {
+  const [isReplying, setIsReplying] = useState(false);
+  const [replyText, setReplyText] = useState(review.owner_reply || '');
 
   return (
     <Animated.View entering={FadeInDown.delay(350 + index * 100).duration(400)} style={reviewStyles.container}>
       {/* Header */}
       <View style={reviewStyles.header}>
-        <Image source={{ uri: review.avatar }} style={reviewStyles.avatar} />
+        <View style={[reviewStyles.avatar, { alignItems: 'center', justifyContent: 'center' }]}>
+           <Text style={{ fontSize: 16, color: '#999', fontWeight: 'bold' }}>{review.customer_initials}</Text>
+        </View>
         <View style={reviewStyles.headerInfo}>
-          <Text style={reviewStyles.name}>{review.name}</Text>
-          <Text style={reviewStyles.orderInfo}>{review.orderInfo}</Text>
+          <Text style={reviewStyles.name}>{review.customer_name}</Text>
+          <Text style={reviewStyles.orderInfo}>Order #{review.order_number} • {review.created_at_human}</Text>
         </View>
         <StarRating rating={review.rating} size={14} />
       </View>
 
       {/* Item Tags */}
-      <View style={reviewStyles.tagsRow}>
-        {review.items.map((item, idx) => (
-          <View key={idx} style={reviewStyles.tag}>
-            <Text style={reviewStyles.tagText}>{item}</Text>
-          </View>
-        ))}
-      </View>
+      {review.order_items && review.order_items.length > 0 && (
+        <View style={reviewStyles.tagsRow}>
+          {review.order_items.map((item, idx) => (
+            <View key={idx} style={reviewStyles.tag}>
+              <Text style={reviewStyles.tagText}>{item.name}</Text>
+            </View>
+          ))}
+        </View>
+      )}
 
       {/* Text Content */}
-      <Text style={reviewStyles.text}>{review.text}</Text>
+      <Text style={reviewStyles.text}>{review.review}</Text>
 
       {/* Image if available */}
-      {review.image && (
-        <Image source={{ uri: review.image }} style={reviewStyles.image} />
+      {review.photos && review.photos.length > 0 && (
+        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+          {review.photos.map((photo, pIdx) => (
+            <Image key={pIdx} source={{ uri: resolveApiMediaUrl(photo) || photo }} style={reviewStyles.image} />
+          ))}
+        </View>
       )}
 
       {/* Actions */}
       <View style={reviewStyles.actionsRow}>
         <Pressable style={reviewStyles.actionBtn} onPress={() => setIsReplying(!isReplying)}>
           <MaterialCommunityIcons name="reply" size={16} color={isReplying ? '#AC1D10' : '#888'} />
-          <Text style={[reviewStyles.actionText, isReplying && { color: '#AC1D10' }]}>Reply</Text>
+          <Text style={[reviewStyles.actionText, isReplying && { color: '#AC1D10' }]}>{review.owner_reply ? 'Edit Reply' : 'Reply'}</Text>
         </Pressable>
         <View style={reviewStyles.actionBtn}>
           <MaterialCommunityIcons name="thumb-up-outline" size={16} color="#888" />
-          <Text style={reviewStyles.actionText}>Helpful ({review.helpfulCount})</Text>
+          <Text style={reviewStyles.actionText}>Helpful ({review.helpful_count || 0})</Text>
         </View>
       </View>
 
@@ -133,7 +118,7 @@ function ReviewCard({ review, index }: { review: typeof REVIEWS[0]; index: numbe
           <Text style={replyStyles.label}>Write a Reply</Text>
           <TextInput
             style={replyStyles.input}
-            placeholder={`Respond to ${review.name.split(' ')[0]} for their feedback...`}
+            placeholder={`Respond to ${review.customer_name.split(' ')[0]} for their feedback...`}
             placeholderTextColor="#AAA"
             multiline
             numberOfLines={3}
@@ -154,6 +139,14 @@ function ReviewCard({ review, index }: { review: typeof REVIEWS[0]; index: numbe
           </View>
         </Animated.View>
       )}
+
+      {/* Existing Reply */}
+      {!isReplying && review.owner_reply && (
+         <View style={{ marginTop: 12, padding: 12, backgroundColor: '#FDFDFD', borderRadius: 8, borderWidth: 1, borderColor: '#F0F0F0' }}>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: '#1A1A1A', marginBottom: 4 }}>Your Reply</Text>
+            <Text style={{ fontSize: 12, color: '#555', lineHeight: 18 }}>{review.owner_reply}</Text>
+         </View>
+      )}
     </Animated.View>
   );
 }
@@ -161,6 +154,11 @@ function ReviewCard({ review, index }: { review: typeof REVIEWS[0]; index: numbe
 /* ─── Main Screen ─── */
 export default function ReviewsScreen() {
   const [searchQuery, setSearchQuery] = useState('');
+  const { user } = useAuth();
+  
+  const { data: response, isLoading } = useOwnerReviews(user?.id);
+  const reviews = response?.reviews || [];
+  const summary = response?.summary || { average_rating: 0, total_reviews: 0, five_star_reviews: 0, distribution: [] };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -218,25 +216,25 @@ export default function ReviewsScreen() {
             <StatCard
               index={0}
               label="Average Rating"
-              sublabel="Based on last 30 days"
+              sublabel="Based on total reviews"
               valueComponent={
                 <View>
-                  <Text style={statsStyles.value}>4.6/5.0</Text>
-                  <StarRating rating={4.6} />
+                  <Text style={statsStyles.value}>{summary.average_rating.toFixed(1)}/5.0</Text>
+                  <StarRating rating={summary.average_rating} />
                 </View>
               }
             />
             <StatCard
               index={1}
               label="Total Reviews"
-              value="1,240"
-              sublabel="+12% this month"
+              value={String(summary.total_reviews)}
+              sublabel="Live data"
             />
             <StatCard
               index={2}
               label="5 Star Reviews"
-              value="850"
-              sublabel="vs. 27% last month"
+              value={String(summary.five_star_reviews)}
+              sublabel="All time"
             />
           </ScrollView>
 
@@ -261,34 +259,36 @@ export default function ReviewsScreen() {
           {/* ── Rating Summary Component ── */}
           <Animated.View entering={FadeInDown.delay(300).duration(400)} style={summaryStyles.container}>
             <View style={summaryStyles.leftBlock}>
-              <Text style={summaryStyles.bigScore}>4.6</Text>
-              <StarRating rating={5} size={14} />
-              <Text style={summaryStyles.reviewCount}>Based on 1,240 reviews</Text>
+              <Text style={summaryStyles.bigScore}>{summary.average_rating.toFixed(1)}</Text>
+              <StarRating rating={Math.round(summary.average_rating)} size={14} />
+              <Text style={summaryStyles.reviewCount}>Based on {summary.total_reviews} reviews</Text>
             </View>
             
             <View style={summaryStyles.barsBlock}>
-              {[
-                { star: 5, count: 804, barW: '75%' },
-                { star: 4, count: 142, barW: '35%' },
-                { star: 3, count: 99, barW: '15%' },
-                { star: 2, count: 30, barW: '8%' },
-                { star: 1, count: 94, barW: '12%' },
-              ].map((row) => (
-                <View key={row.star} style={summaryStyles.barRow}>
-                  <Text style={summaryStyles.barStarText}>{row.star}</Text>
+              {summary.distribution.length > 0 ? summary.distribution.map((row) => (
+                <View key={row.rating} style={summaryStyles.barRow}>
+                  <Text style={summaryStyles.barStarText}>{row.rating}</Text>
                   <View style={summaryStyles.barTrack}>
-                    <View style={[summaryStyles.barFill, { width: row.barW as any }]} />
+                    <View style={[summaryStyles.barFill, { width: `${row.percentage}%` as any }]} />
                   </View>
                   <Text style={summaryStyles.barCountText}>{row.count}</Text>
+                </View>
+              )) : [5, 4, 3, 2, 1].map((star) => (
+                <View key={star} style={summaryStyles.barRow}>
+                  <Text style={summaryStyles.barStarText}>{star}</Text>
+                  <View style={summaryStyles.barTrack} />
+                  <Text style={summaryStyles.barCountText}>0</Text>
                 </View>
               ))}
             </View>
           </Animated.View>
 
           {/* ── Reviews List ── */}
-          {REVIEWS.map((review, i) => (
+          {reviews.length > 0 ? reviews.map((review, i) => (
             <ReviewCard key={review.id} review={review} index={i} />
-          ))}
+          )) : (
+            <Text style={{ textAlign: 'center', color: '#888', marginTop: 20 }}>No reviews yet.</Text>
+          )}
 
           <View style={{ height: 100 }} />
         </ScrollView>

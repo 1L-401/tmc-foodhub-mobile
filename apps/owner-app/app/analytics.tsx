@@ -20,36 +20,30 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import {
-  ANALYTICS_STATS,
-  HEATMAP_DAYS,
-  HEATMAP_HOURS,
-  ORDER_PATTERNS_HEATMAP,
-  RECENT_HIGH_VALUE_ORDERS,
-  SALES_REVENUE_CHART,
-  TOP_SELLING_ITEMS,
-} from '@/constants/mock-analytics-data';
+import { useQuery } from '@tanstack/react-query';
+import { fetchOwnerOrders, ownerOrderQueryKeys, type OwnerOrder } from '@/services/orderService';
+import { useAuth } from '@/context/AuthContext';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 /* ─── Bar Chart ─── */
-function SalesChart() {
-  const maxVal = Math.max(...SALES_REVENUE_CHART.map((d) => d.thisPeriod + d.lastPeriod));
+function SalesChart({ data = [] }: { data: { label: string; thisPeriod: number; lastPeriod: number }[] }) {
+  const maxVal = Math.max(...data.map((d) => d.thisPeriod + d.lastPeriod), 1);
   return (
     <View style={chartStyles.container}>
       {/* Y Axis */}
       <View style={chartStyles.yLabels}>
-        <Text style={chartStyles.yText}>60k</Text>
-        <Text style={chartStyles.yText}>45k</Text>
-        <Text style={chartStyles.yText}>30k</Text>
-        <Text style={chartStyles.yText}>15k</Text>
+        <Text style={chartStyles.yText}>{(maxVal).toFixed(0)}</Text>
+        <Text style={chartStyles.yText}>{(maxVal * 0.75).toFixed(0)}</Text>
+        <Text style={chartStyles.yText}>{(maxVal * 0.5).toFixed(0)}</Text>
+        <Text style={chartStyles.yText}>{(maxVal * 0.25).toFixed(0)}</Text>
         <Text style={chartStyles.yText}>0</Text>
       </View>
 
       <View style={chartStyles.bars}>
-        {SALES_REVENUE_CHART.map((d, i) => {
+        {data.map((d, i) => {
           const totalPct = ((d.thisPeriod + d.lastPeriod) / maxVal) * 100;
-          const thisPeriodPct = (d.thisPeriod / (d.thisPeriod + d.lastPeriod)) * 100;
+          const thisPeriodPct = d.thisPeriod + d.lastPeriod > 0 ? (d.thisPeriod / (d.thisPeriod + d.lastPeriod)) * 100 : 0;
           const lastPeriodPct = 100 - thisPeriodPct;
 
           return (
@@ -73,21 +67,18 @@ function SalesChart() {
 }
 
 /* ─── Heatmap ─── */
-function OrderPatternsHeatmap() {
+const HEATMAP_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const HEATMAP_HOURS = ['10a', '12p', '2p', '4p', '6p', '8p', '10p'];
+
+function OrderPatternsHeatmap({ heatmapData = [] }: { heatmapData: number[][] }) {
   const getColor = (val: number) => {
     switch (val) {
-      case 1:
-        return '#FFF4EE';
-      case 2:
-        return '#F5D3C8';
-      case 3:
-        return '#E07A5F';
-      case 4:
-        return '#B02613';
-      case 5:
-        return '#7A130A';
-      default:
-        return '#FFF4EE';
+      case 1: return '#FFF4EE';
+      case 2: return '#F5D3C8';
+      case 3: return '#E07A5F';
+      case 4: return '#B02613';
+      case 5: return '#7A130A';
+      default: return '#FFF4EE';
     }
   };
 
@@ -107,7 +98,7 @@ function OrderPatternsHeatmap() {
       {HEATMAP_DAYS.map((day, rIndex) => (
         <View key={day} style={heatmapStyles.gridRow}>
           <Text style={heatmapStyles.dayLabel}>{day}</Text>
-          {ORDER_PATTERNS_HEATMAP[rIndex].map((val, cIndex) => (
+          {heatmapData[rIndex]?.map((val, cIndex) => (
             <Animated.View
               key={`${day}-${cIndex}`}
               entering={FadeInDown.delay(400 + (rIndex * 7 + cIndex) * 10).duration(400)}
@@ -119,14 +110,11 @@ function OrderPatternsHeatmap() {
 
       {/* Legend */}
       <View style={heatmapStyles.legendRow}>
-        <Text style={heatmapStyles.legendText}>Low Volume</Text>
+        <Text style={heatmapStyles.legendText}>Low</Text>
         {[1, 2, 3, 4, 5].map((val) => (
-          <View
-            key={val}
-            style={[heatmapStyles.legendCell, { backgroundColor: getColor(val) }]}
-          />
+          <View key={val} style={[heatmapStyles.legendCell, { backgroundColor: getColor(val) }]} />
         ))}
-        <Text style={heatmapStyles.legendText}>High Volume</Text>
+        <Text style={heatmapStyles.legendText}>High</Text>
       </View>
     </View>
   );
@@ -151,6 +139,90 @@ function StatusBadge({ status }: { status: string }) {
 export default function AnalyticsScreen() {
   const headerScale = useSharedValue(0.95);
   const headerOpacity = useSharedValue(0);
+
+  const { data: orders = [] } = useQuery({
+    queryKey: ownerOrderQueryKeys.all,
+    queryFn: fetchOwnerOrders,
+  });
+
+  const totalRevenue = orders.filter(o => ['Delivered', 'Out for Delivery', 'Order Confirmed'].includes(o.status)).reduce((sum, o) => sum + o.total, 0);
+  const totalOrders = orders.length;
+  const avgOrderValue = totalOrders > 0 ? (totalRevenue / totalOrders).toFixed(2) : '0.00';
+
+  const analyticsStats = [
+    { id: 1, label: 'Total Revenue', value: `₱${totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, growth: '+Live', isPositive: true, comparison: 'Current period' },
+    { id: 2, label: 'Total Orders', value: String(totalOrders), growth: '+Live', isPositive: true, comparison: 'Current period' },
+    { id: 3, label: 'Store Views', value: '1,240', growth: '+12%', isPositive: true, comparison: 'vs last week' },
+    { id: 4, label: 'Avg Order Value', value: `₱${avgOrderValue}`, growth: 'Live', isPositive: true, comparison: 'Current period' },
+  ];
+
+  const salesChartData = React.useMemo(() => {
+    const result: { label: string; thisPeriod: number; lastPeriod: number; dateString: string }[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const label = d.toLocaleDateString('en-US', { weekday: 'short' });
+      result.push({ label, thisPeriod: 0, lastPeriod: 0, dateString: d.toDateString() });
+    }
+    orders.forEach((o) => {
+      if (['Delivered', 'Out for Delivery', 'Order Confirmed'].includes(o.status)) {
+        const orderDate = new Date(o.placedAt).toDateString();
+        const bucket = result.find((r) => r.dateString === orderDate);
+        if (bucket) {
+          bucket.thisPeriod += o.total;
+        }
+      }
+    });
+    return result;
+  }, [orders]);
+
+  const heatmapData = React.useMemo(() => {
+    const matrix = Array(7).fill(0).map(() => Array(7).fill(1));
+    orders.forEach(o => {
+       const date = new Date(o.placedAt);
+       let day = date.getDay() - 1; // 0 is Mon, 6 is Sun
+       if (day < 0) day = 6;
+       const hour = date.getHours();
+       let colIndex = 0;
+       if (hour >= 10 && hour < 12) colIndex = 0;
+       else if (hour >= 12 && hour < 14) colIndex = 1;
+       else if (hour >= 14 && hour < 16) colIndex = 2;
+       else if (hour >= 16 && hour < 18) colIndex = 3;
+       else if (hour >= 18 && hour < 20) colIndex = 4;
+       else if (hour >= 20 && hour < 22) colIndex = 5;
+       else if (hour >= 22) colIndex = 6;
+       
+       if (day >= 0 && day <= 6 && colIndex >= 0 && colIndex <= 6) {
+           matrix[day][colIndex] = Math.min(matrix[day][colIndex] + 1, 5);
+       }
+    });
+    return matrix;
+  }, [orders]);
+
+  const highValueOrders = React.useMemo(() => {
+    return [...orders].sort((a, b) => b.total - a.total).slice(0, 5);
+  }, [orders]);
+
+  const topSellingItems = React.useMemo(() => {
+    const itemsMap: Record<string, {name: string; orders: number; image: string | null}> = {};
+    orders.forEach(o => {
+       o.items.forEach(item => {
+           if (!itemsMap[item.name]) {
+               itemsMap[item.name] = { name: item.name, orders: 0, image: item.image };
+           }
+           itemsMap[item.name].orders += item.quantity;
+       });
+    });
+    const sorted = Object.values(itemsMap).sort((a, b) => b.orders - a.orders).slice(0, 4);
+    const maxOrders = Math.max(...sorted.map(s => s.orders), 1);
+    return sorted.map((s, i) => ({
+       id: i,
+       name: s.name,
+       orders: s.orders,
+       image: s.image || 'https://ui-avatars.com/api/?name=Item&background=F4F4F4&color=1A1A1A',
+       progress: s.orders / maxOrders,
+    }));
+  }, [orders]);
 
   useEffect(() => {
     headerOpacity.value = withTiming(1, { duration: 600 });
@@ -230,7 +302,7 @@ export default function AnalyticsScreen() {
 
           {/* Stat Cards 2x2 Grid */}
           <Animated.View entering={FadeInDown.delay(300).duration(400)} style={styles.statsGrid}>
-            {ANALYTICS_STATS.map((stat, i) => (
+            {analyticsStats.map((stat, i) => (
               <View key={stat.id} style={styles.statCard}>
                 <View style={cardStyles.header}>
                   <Text style={cardStyles.label}>{stat.label}</Text>
@@ -264,7 +336,7 @@ export default function AnalyticsScreen() {
             <View style={styles.sectionHeader}>
               <View>
                 <Text style={styles.sectionTitle}>Sales/Revenue</Text>
-                <Text style={styles.sectionLargeValue}>₱42,910.00</Text>
+                <Text style={styles.sectionLargeValue}>₱{totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
               </View>
 
               <View style={styles.chartHeaderRight}>
@@ -281,7 +353,7 @@ export default function AnalyticsScreen() {
               </View>
             </View>
 
-            <SalesChart />
+            <SalesChart data={salesChartData} />
           </Animated.View>
 
           {/* Top Selling Items */}
@@ -293,7 +365,7 @@ export default function AnalyticsScreen() {
               </Pressable>
             </View>
 
-            {TOP_SELLING_ITEMS.map((item, i) => (
+            {topSellingItems.length > 0 ? topSellingItems.map((item, i) => (
               <View key={item.id} style={styles.topItemRow}>
                 <Image source={{ uri: item.image }} style={styles.topItemImage} />
                 <View style={styles.topItemInfo}>
@@ -309,7 +381,7 @@ export default function AnalyticsScreen() {
                   </View>
                 </View>
               </View>
-            ))}
+            )) : <Text style={{ color: '#888', textAlign: 'center' }}>No items sold yet.</Text>}
           </Animated.View>
 
           {/* Order Patterns Heatmap */}
@@ -318,7 +390,7 @@ export default function AnalyticsScreen() {
               <Text style={styles.sectionTitle}>Order Patterns</Text>
               <Text style={styles.chartSubTitle}>Peak hours vs. day of week</Text>
             </View>
-            <OrderPatternsHeatmap />
+            <OrderPatternsHeatmap heatmapData={heatmapData} />
           </Animated.View>
 
           {/* Recent High Value Orders */}
@@ -337,7 +409,7 @@ export default function AnalyticsScreen() {
               <Text style={[styles.tableCol, { flex: 0.8 }]}>Status</Text>
             </View>
 
-            {RECENT_HIGH_VALUE_ORDERS.map((order, i) => (
+            {highValueOrders.length > 0 ? highValueOrders.map((order, i) => (
               <AnimatedPressable
                 key={order.id}
                 entering={FadeInDown.delay(800 + i * 100).duration(400)}
@@ -352,8 +424,8 @@ export default function AnalyticsScreen() {
                   {order.orderNumber}
                 </Text>
                 <View style={[styles.tableCustomerWrap, { flex: 1.5 }]}>
-                  <Image source={{ uri: order.avatar }} style={styles.tableAvatar} />
-                  <Text style={styles.tableCell}>{order.customerName}</Text>
+                  <View style={styles.tableAvatar} />
+                  <Text style={styles.tableCell} numberOfLines={1}>{order.customerName}</Text>
                 </View>
                 <Text style={[styles.tableCell, styles.tableCellBold, { flex: 0.8 }]}>
                   ₱{order.total.toFixed(2)}
@@ -362,7 +434,7 @@ export default function AnalyticsScreen() {
                   <StatusBadge status={order.status} />
                 </View>
               </AnimatedPressable>
-            ))}
+            )) : <Text style={{ color: '#888', textAlign: 'center', marginTop: 10 }}>No orders yet.</Text>}
           </Animated.View>
 
           <View style={{ height: 40 }} />

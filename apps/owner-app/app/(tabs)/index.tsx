@@ -24,16 +24,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { fetchOwnerOrders, ownerOrderQueryKeys } from '@/services/orderService';
 import { fetchOwnerProfile } from '@/services/ownerProfileService';
-import { fetchInventoryItems, inventoryQueryKeys } from '@/services/inventoryService';import { resolveApiMediaUrl } from '@/src/api/apiConfig';
-import {
-  RECENT_REVIEWS,
-  SALES_DATA,
-} from '@/constants/mock-dashboard-data';
+import { fetchInventoryItems, inventoryQueryKeys } from '@/services/inventoryService';
+import { useAuth } from '@/context/AuthContext';
+import { useOwnerReviews } from '@/services/reviewService';
+import { resolveApiMediaUrl } from '@/src/api/apiConfig';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 /* ─── Simple Bar Chart ─── */
-function MiniBarChart({ data = SALES_DATA }: { data?: { label: string; value: number }[] }) {
+function MiniBarChart({ data = [] }: { data?: { label: string; value: number }[] }) {
   const maxVal = Math.max(...data.map((d) => d.value), 1);
   return (
     <View style={chartStyles.container}>
@@ -132,10 +131,17 @@ export default function DashboardScreen() {
   const headerScale = useSharedValue(0.95);
   const headerOpacity = useSharedValue(0);
 
+  const { user } = useAuth();
+
   const { data: profile } = useQuery({
     queryKey: ['owner', 'profile'],
     queryFn: () => fetchOwnerProfile(),
   });
+
+  const { data: reviewsResponse, isLoading: isReviewsLoading } = useOwnerReviews(user?.id);
+  const recentReviews = useMemo(() => {
+    return reviewsResponse?.reviews?.slice(0, 3) || [];
+  }, [reviewsResponse]);
 
   const { data: orders = [], isLoading: isOrdersLoading } = useQuery({
     queryKey: ownerOrderQueryKeys.all,
@@ -172,8 +178,6 @@ export default function DashboardScreen() {
   }, [inventoryItems]);
 
   const salesData = useMemo(() => {
-    if (!orders || orders.length === 0) return undefined; // Fallback array handling handled in Component
-
     const result: { label: string; value: number; dateString: string }[] = [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
@@ -181,6 +185,8 @@ export default function DashboardScreen() {
       const label = d.toLocaleDateString('en-US', { weekday: 'short' });
       result.push({ label, value: 0, dateString: d.toDateString() });
     }
+
+    if (!orders || orders.length === 0) return result.map(({ label, value }) => ({ label, value }));
 
     orders.forEach((o) => {
       if (['Delivered', 'Out for Delivery', 'Order Confirmed'].includes(o.status)) {
@@ -397,21 +403,23 @@ export default function DashboardScreen() {
               </Pressable>
             </View>
 
-            {RECENT_REVIEWS.map((review) => (
+            {recentReviews.map((review) => (
               <View key={review.id} style={styles.reviewCard}>
                 <View style={styles.reviewTop}>
-                  <Image
-                    source={{ uri: review.avatar }}
-                    style={styles.reviewAvatar}
-                  />
+                  <View style={[styles.reviewAvatar, { alignItems: 'center', justifyContent: 'center' }]}>
+                    <Text style={{ fontSize: 14, color: '#999', fontWeight: 'bold' }}>{review.customer_initials}</Text>
+                  </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.reviewName}>{review.name}</Text>
+                    <Text style={styles.reviewName}>{review.customer_name}</Text>
                   </View>
                   <StarRating rating={review.rating} />
                 </View>
                 <Text style={styles.reviewText}>{review.review}</Text>
               </View>
             ))}
+            {recentReviews.length === 0 && !isReviewsLoading && (
+               <Text style={{textAlign: 'center', color: '#999', marginTop: 10}}>No recent reviews.</Text>
+            )}
           </Animated.View>
 
           <View style={{ height: 100 }} />
