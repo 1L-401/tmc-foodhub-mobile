@@ -239,10 +239,12 @@ export default function MoreScreen() {
             <MenuItem
               icon="store-outline"
               label="View Restaurant Profile"
+              onPress={() => router.push('/(tabs)/profile')}
             />
             <MenuItem
               icon="cog-outline"
               label="Account Settings"
+              onPress={() => router.push('/(tabs)/profile')}
             />
             <MenuItem
               icon="weather-night"
@@ -261,8 +263,16 @@ export default function MoreScreen() {
           {/* Operations */}
           <Animated.View entering={FadeInDown.delay(300).duration(400)}>
             <SectionHeader title="Operations" />
-            <MenuItem icon="view-dashboard-outline" label="Dashboard" />
-            <MenuItem icon="clipboard-text-outline" label="Orders" />
+            <MenuItem
+              icon="view-dashboard-outline"
+              label="Dashboard"
+              onPress={() => router.push('/(tabs)')}
+            />
+            <MenuItem
+              icon="clipboard-text-outline"
+              label="Orders"
+              onPress={() => router.push('/(tabs)/orders')}
+            />
             <MenuItem
               icon="package-variant-closed"
               label="Inventory"
@@ -275,7 +285,11 @@ export default function MoreScreen() {
           {/* Menu */}
           <Animated.View entering={FadeInDown.delay(400).duration(400)}>
             <SectionHeader title="Menu" />
-            <MenuItem icon="silverware-fork-knife" label="Menu" />
+            <MenuItem
+              icon="silverware-fork-knife"
+              label="Menu"
+              onPress={() => router.push('/(tabs)/menu')}
+            />
             <MenuItem icon="view-grid-outline" label="Categories" onPress={() => router.push('/categories')} />
             <MenuItem icon="tag-outline" label="Promotions" onPress={() => router.push('/promotions')} />
           </Animated.View>
@@ -305,7 +319,11 @@ export default function MoreScreen() {
           {/* System */}
           <Animated.View entering={FadeInDown.delay(700).duration(400)}>
             <SectionHeader title="System" />
-            <MenuItem icon="cog-outline" label="Settings" />
+            <MenuItem
+              icon="cog-outline"
+              label="Settings"
+              onPress={() => router.push('/(tabs)/profile')}
+            />
           </Animated.View>
 
           {/* Logout */}
