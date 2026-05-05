@@ -72,6 +72,13 @@ const ACTIVE_ORDER_STATUSES: OwnerOrderStatus[] = [
   'Out for Delivery',
 ];
 
+const REVENUE_ORDER_STATUSES: OwnerOrderStatus[] = [
+  'Pending',
+  'Order Confirmed',
+  'Out for Delivery',
+  'Delivered',
+];
+
 const formatCurrency = (amount: number) =>
   `PHP ${Number(amount || 0).toLocaleString('en-PH', {
     minimumFractionDigits: 2,
@@ -383,7 +390,10 @@ export default function DashboardScreen() {
   );
 
   const todaysRevenue = useMemo(
-    () => todayOrders.reduce((sum, order) => sum + (Number(order.total) || 0), 0),
+    () =>
+      todayOrders
+        .filter((order) => REVENUE_ORDER_STATUSES.includes(order.status))
+        .reduce((sum, order) => sum + (Number(order.total) || 0), 0),
     [todayOrders],
   );
 
@@ -392,7 +402,11 @@ export default function DashboardScreen() {
   const chartData = useMemo<SalesChartPoint[]>(() => {
     return recentDays(7).map((date) => {
       const dateKey = toDateKey(date);
-      const dayOrders = orders.filter((order) => toDateKey(order.placedAt) === dateKey);
+      const dayOrders = orders.filter(
+        (order) =>
+          toDateKey(order.placedAt) === dateKey &&
+          REVENUE_ORDER_STATUSES.includes(order.status),
+      );
 
       return {
         key: dateKey,
@@ -411,7 +425,10 @@ export default function DashboardScreen() {
     const weekKeys = new Set(recentDays(7).map(toDateKey));
 
     orders.forEach((order) => {
-      if (!weekKeys.has(toDateKey(order.placedAt))) {
+      if (
+        !weekKeys.has(toDateKey(order.placedAt)) ||
+        !REVENUE_ORDER_STATUSES.includes(order.status)
+      ) {
         return;
       }
 
