@@ -18,6 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CustomToggle } from '@/components/custom-toggle';
 import { useAuth } from '@/context/AuthContext';
+import { useOwnerTheme, type OwnerThemeColors } from '@/context/ThemeContext';
 import type { OwnerUser } from '@/services/authService';
 
 const PLACEHOLDER_AVATAR_BASE = 'https://via.placeholder.com/80/E8E8E8/999?text=';
@@ -84,6 +85,9 @@ interface MenuItemProps {
 }
 
 function MenuItem({ icon, label, onPress, rightElement }: MenuItemProps) {
+  const { colors } = useOwnerTheme();
+  const menuStyles = React.useMemo(() => createMenuStyles(colors), [colors]);
+
   return (
     <Pressable
       style={({ pressed }) => [menuStyles.row, pressed && menuStyles.pressed]}
@@ -91,7 +95,7 @@ function MenuItem({ icon, label, onPress, rightElement }: MenuItemProps) {
       <MaterialCommunityIcons
         name={icon as any}
         size={20}
-        color="#555"
+        color={colors.icon}
       />
       <Text style={menuStyles.label}>{label}</Text>
       {rightElement && <View style={menuStyles.right}>{rightElement}</View>}
@@ -100,13 +104,17 @@ function MenuItem({ icon, label, onPress, rightElement }: MenuItemProps) {
 }
 
 function SectionHeader({ title }: { title: string }) {
+  const { colors } = useOwnerTheme();
+  const menuStyles = React.useMemo(() => createMenuStyles(colors), [colors]);
+
   return <Text style={menuStyles.sectionHeader}>{title}</Text>;
 }
 
 export default function MoreScreen() {
-  const [darkMode, setDarkMode] = React.useState(false);
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
   const { logout, user, refreshOwnerProfile, isProfileRefreshing } = useAuth();
+  const { colors, isDarkMode, setDarkMode } = useOwnerTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const isMountedRef = React.useRef(true);
 
   const ownerName = React.useMemo(() => buildOwnerName(user), [user]);
@@ -196,7 +204,7 @@ export default function MoreScreen() {
             <MaterialCommunityIcons
               name="chevron-left"
               size={26}
-              color="#1A1A1A"
+              color={colors.text}
             />
           </Pressable>
           <Text style={styles.headerTitle}>More</Text>
@@ -210,6 +218,9 @@ export default function MoreScreen() {
             <RefreshControl
               refreshing={isProfileRefreshing}
               onRefresh={handleRefresh}
+              tintColor={colors.accent}
+              colors={[colors.accent]}
+              progressBackgroundColor={colors.card}
             />
           }>
           {/* Profile */}
@@ -228,7 +239,7 @@ export default function MoreScreen() {
               <Text style={styles.profileRole}>{restaurantName}</Text>
             </View>
             {isProfileRefreshing ? (
-              <ActivityIndicator size="small" color="#999" />
+              <ActivityIndicator size="small" color={colors.subtleText} />
             ) : null}
           </Animated.View>
 
@@ -239,18 +250,21 @@ export default function MoreScreen() {
             <MenuItem
               icon="store-outline"
               label="View Restaurant Profile"
+              onPress={() => router.push('/(tabs)/profile')}
             />
             <MenuItem
               icon="cog-outline"
               label="Account Settings"
+              onPress={() => router.push('/(tabs)/profile')}
             />
             <MenuItem
               icon="weather-night"
               label="Dark Mode"
               rightElement={
                 <CustomToggle
-                  value={darkMode}
+                  value={isDarkMode}
                   onValueChange={setDarkMode}
+                  activeColor={colors.accent}
                 />
               }
             />
@@ -261,8 +275,16 @@ export default function MoreScreen() {
           {/* Operations */}
           <Animated.View entering={FadeInDown.delay(300).duration(400)}>
             <SectionHeader title="Operations" />
-            <MenuItem icon="view-dashboard-outline" label="Dashboard" />
-            <MenuItem icon="clipboard-text-outline" label="Orders" />
+            <MenuItem
+              icon="view-dashboard-outline"
+              label="Dashboard"
+              onPress={() => router.push('/(tabs)')}
+            />
+            <MenuItem
+              icon="clipboard-text-outline"
+              label="Orders"
+              onPress={() => router.push('/(tabs)/orders')}
+            />
             <MenuItem
               icon="package-variant-closed"
               label="Inventory"
@@ -275,7 +297,11 @@ export default function MoreScreen() {
           {/* Menu */}
           <Animated.View entering={FadeInDown.delay(400).duration(400)}>
             <SectionHeader title="Menu" />
-            <MenuItem icon="silverware-fork-knife" label="Menu" />
+            <MenuItem
+              icon="silverware-fork-knife"
+              label="Menu"
+              onPress={() => router.push('/(tabs)/menu')}
+            />
             <MenuItem icon="view-grid-outline" label="Categories" onPress={() => router.push('/categories')} />
             <MenuItem icon="tag-outline" label="Promotions" onPress={() => router.push('/promotions')} />
           </Animated.View>
@@ -305,7 +331,11 @@ export default function MoreScreen() {
           {/* System */}
           <Animated.View entering={FadeInDown.delay(700).duration(400)}>
             <SectionHeader title="System" />
-            <MenuItem icon="cog-outline" label="Settings" />
+            <MenuItem
+              icon="cog-outline"
+              label="Settings"
+              onPress={() => router.push('/(tabs)/profile')}
+            />
           </Animated.View>
 
           {/* Logout */}
@@ -324,7 +354,7 @@ export default function MoreScreen() {
                 <MaterialCommunityIcons
                   name="logout"
                   size={20}
-                  color="#AC1D10"
+                  color={colors.danger}
                 />
               )}
               <Text style={styles.logoutText}>{isLoggingOut ? 'Logging out...' : 'Logout'}</Text>
@@ -338,8 +368,8 @@ export default function MoreScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#FFFFFF' },
+const createStyles = (colors: OwnerThemeColors) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.background },
   container: { flex: 1 },
   pressed: { opacity: 0.7 },
 
@@ -360,7 +390,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: colors.text,
     marginLeft: 8,
   },
   headerSpacer: { width: 32 },
@@ -380,15 +410,15 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: colors.avatarBackground,
   },
-  profileName: { fontSize: 16, fontWeight: '700', color: '#1A1A1A' },
-  profileEmail: { fontSize: 12, color: '#777', marginTop: 2 },
-  profileRole: { fontSize: 13, color: '#999', marginTop: 2 },
+  profileName: { fontSize: 16, fontWeight: '700', color: colors.text },
+  profileEmail: { fontSize: 12, color: colors.mutedText, marginTop: 2 },
+  profileRole: { fontSize: 13, color: colors.subtleText, marginTop: 2 },
 
   divider: {
     height: 1,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: colors.divider,
     marginVertical: 8,
   },
 
@@ -400,12 +430,12 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 4,
     borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
+    borderTopColor: colors.divider,
   },
   logoutText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#AC1D10',
+    color: colors.danger,
   },
   logoutDisabled: {
     opacity: 0.65,
@@ -413,7 +443,7 @@ const styles = StyleSheet.create({
   logoutPressed: { opacity: 0.7 },
 });
 
-const menuStyles = StyleSheet.create({
+const createMenuStyles = (colors: OwnerThemeColors) => StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -421,12 +451,12 @@ const menuStyles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 4,
   },
-  label: { flex: 1, fontSize: 14, fontWeight: '500', color: '#1A1A1A' },
+  label: { flex: 1, fontSize: 14, fontWeight: '500', color: colors.text },
   right: { marginLeft: 'auto' },
   sectionHeader: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#999',
+    color: colors.subtleText,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginTop: 8,

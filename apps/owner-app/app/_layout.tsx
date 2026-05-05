@@ -1,4 +1,4 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { ThemeProvider } from '@react-navigation/native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -7,7 +7,7 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import 'react-native-reanimated';
 
 import { AuthProvider, useAuth } from '@/context/AuthContext';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { OwnerThemeProvider, useOwnerTheme } from '@/context/ThemeContext';
 
 const queryClient = new QueryClient();
 
@@ -17,6 +17,7 @@ export const unstable_settings = {
 
 function AppStack() {
   const { isAuthenticated, isHydrating } = useAuth();
+  const { colors } = useOwnerTheme();
   const segments = useSegments();
   const router = useRouter();
 
@@ -38,8 +39,8 @@ function AppStack() {
 
   if (isHydrating) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" />
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
   }
@@ -98,17 +99,28 @@ function AppStack() {
   );
 }
 
-export default function RootLayout() {
-  const colorScheme = useColorScheme();
+function ThemedRoot() {
+  const { colors, navigationTheme, resolvedTheme } = useOwnerTheme();
 
   return (
+    <ThemeProvider value={navigationTheme}>
+      <AuthProvider>
+        <AppStack />
+      </AuthProvider>
+      <StatusBar
+        style={resolvedTheme === 'dark' ? 'light' : 'dark'}
+        backgroundColor={colors.background}
+      />
+    </ThemeProvider>
+  );
+}
+
+export default function RootLayout() {
+  return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <AuthProvider>
-          <AppStack />
-        </AuthProvider>
-        <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
-      </ThemeProvider>
+      <OwnerThemeProvider>
+        <ThemedRoot />
+      </OwnerThemeProvider>
     </QueryClientProvider>
   );
 }

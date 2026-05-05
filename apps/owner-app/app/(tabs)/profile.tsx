@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { useAuth } from '@/context/AuthContext';
+import { useOwnerTheme, type OwnerThemeColors } from '@/context/ThemeContext';
 import { fetchOwnerProfile } from '@/services/ownerProfileService';
 import { fetchOwnerOrders, ownerOrderQueryKeys } from '@/services/orderService';
 import { fetchInventoryItems, inventoryQueryKeys } from '@/services/inventoryService';
@@ -15,6 +16,8 @@ import { resolveApiMediaUrl } from '@/src/api/apiConfig';
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
+  const { colors } = useOwnerTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const { data: profile } = useQuery({
     queryKey: ['owner', 'profile'],
@@ -48,7 +51,8 @@ export default function ProfileScreen() {
 
   const displayName = profile?.restaurant_name?.trim() || profile?.name?.trim() || 'Unknown Restaurant';
   const displayEmail = profile?.email?.trim() || 'No email provided';
-  const logoUrl = profile?.logo ? resolveApiMediaUrl(profile.logo) : `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=F7E8E6&color=AC1D10&size=150`;
+  const fallbackLogoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=F7E8E6&color=AC1D10&size=150`;
+  const logoUrl = (profile?.logo ? resolveApiMediaUrl(profile.logo) : null) ?? fallbackLogoUrl;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -64,7 +68,7 @@ export default function ProfileScreen() {
           </Text>
         </View>
         <Pressable style={styles.settingsBtn} onPress={() => router.push('/more')}>
-          <MaterialCommunityIcons name="cog-outline" size={20} color="#1A1A1A" />
+          <MaterialCommunityIcons name="cog-outline" size={20} color={colors.text} />
         </Pressable>
       </Animated.View>
 
@@ -128,7 +132,7 @@ export default function ProfileScreen() {
             </View>
           ) : (
             <View style={[styles.orderCard, { justifyContent: 'center', paddingVertical: 20 }]}>
-              <Text style={{ color: '#888', fontSize: 13 }}>No recent orders yet.</Text>
+              <Text style={styles.emptyText}>No recent orders yet.</Text>
             </View>
           )}
         </Animated.View>
@@ -176,7 +180,7 @@ export default function ProfileScreen() {
               router.replace('/(auth)/login');
             }}
           >
-            <MaterialCommunityIcons name="logout" size={20} color="#AC1D10" style={{ marginRight: 8 }} />
+            <MaterialCommunityIcons name="logout" size={20} color={colors.danger} style={{ marginRight: 8 }} />
             <Text style={styles.logoutBtnText}>Sign Out</Text>
           </Pressable>
         </Animated.View>
@@ -187,10 +191,10 @@ export default function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: OwnerThemeColors) => StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -209,16 +213,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   logoText: { color: '#FFF', fontSize: 8, fontWeight: '900' },
-  logoTitle: { fontSize: 8, color: '#1A1A1A', fontWeight: '500', lineHeight: 10 },
+  logoTitle: { fontSize: 8, color: colors.text, fontWeight: '500', lineHeight: 10 },
   logoBold: { fontWeight: '900', color: '#AC1D10' },
   settingsBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#EFEFEF',
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.card,
   },
   scrollContent: {
     paddingHorizontal: 20,
@@ -235,18 +240,18 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: colors.avatarBackground,
     marginBottom: 12,
   },
   name: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: colors.text,
     marginBottom: 2,
   },
   email: {
     fontSize: 13,
-    color: '#888',
+    color: colors.mutedText,
     marginBottom: 12,
   },
   editBtn: {
@@ -254,13 +259,13 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E5E5E5',
-    backgroundColor: '#FAFAFA',
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
   },
   editBtnText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#333',
+    color: colors.text,
   },
 
   /* Stats Row */
@@ -277,17 +282,17 @@ const styles = StyleSheet.create({
   statVal: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#1A1A1A',
+    color: colors.text,
   },
   statLabel: {
     fontSize: 12,
-    color: '#AAA',
+    color: colors.subtleText,
     marginTop: 2,
   },
   statDivider: {
     width: 1,
     height: 30,
-    backgroundColor: '#EFEFEF',
+    backgroundColor: colors.divider,
   },
 
   /* Section Header */
@@ -301,7 +306,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: colors.text,
   },
   sectionAction: {
     fontSize: 12,
@@ -316,15 +321,15 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#EFEFEF',
-    backgroundColor: '#FFF',
+    borderColor: colors.border,
+    backgroundColor: colors.card,
     marginBottom: 20,
   },
   orderIconWrap: {
     width: 48,
     height: 48,
     borderRadius: 8,
-    backgroundColor: '#FBE7E4',
+    backgroundColor: colors.avatarBackground,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -336,20 +341,20 @@ const styles = StyleSheet.create({
   orderTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: colors.text,
     marginBottom: 2,
   },
   orderSub: {
     fontSize: 11,
-    color: '#888',
+    color: colors.mutedText,
     marginBottom: 2,
   },
   orderTime: {
     fontSize: 11,
-    color: '#BBB',
+    color: colors.subtleText,
   },
   reorderBtn: {
-    backgroundColor: '#FBE7E4',
+    backgroundColor: colors.dangerSurface,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 14,
@@ -370,8 +375,8 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#EFEFEF',
-    backgroundColor: '#FFF',
+    borderColor: colors.border,
+    backgroundColor: colors.card,
     padding: 14,
   },
   gridIconWrap: {
@@ -393,12 +398,12 @@ const styles = StyleSheet.create({
   gridTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: colors.text,
     marginBottom: 2,
   },
   gridSub: {
     fontSize: 11,
-    color: '#888',
+    color: colors.mutedText,
   },
 
   /* Banner */
@@ -456,13 +461,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 20,
-    backgroundColor: '#FFF',
+    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: '#FBE7E4',
+    borderColor: colors.border,
   },
   logoutBtnText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#AC1D10',
+    color: colors.danger,
+  },
+  emptyText: {
+    color: colors.mutedText,
+    fontSize: 13,
   },
 });

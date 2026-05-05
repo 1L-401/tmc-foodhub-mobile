@@ -16,6 +16,7 @@ import {
 import Animated, { FadeInDown, FadeInRight } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useOwnerTheme, type OwnerThemeColors } from '@/context/ThemeContext';
 import {
   fetchOwnerOrders,
   getNextOrderStatus,
@@ -27,7 +28,7 @@ import {
   type OwnerOrderStatus,
 } from '@/services/orderService';
 
-type FilterKey = 'All' | 'Pending' | 'Order Confirmed' | 'Out for Delivery' | 'Delivered';
+type FilterKey = 'All' | 'Pending' | 'Order Confirmed' | 'Out for Delivery' | 'Delivered' | 'Cancelled';
 
 const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'All', label: 'All' },
@@ -35,6 +36,7 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'Order Confirmed', label: 'Confirmed' },
   { key: 'Out for Delivery', label: 'Out for Delivery' },
   { key: 'Delivered', label: 'Complete' },
+  { key: 'Cancelled', label: 'Cancelled' },
 ];
 
 const formatCurrency = (amount: number) => `PHP ${Number(amount || 0).toFixed(2)}`;
@@ -110,6 +112,9 @@ function OrderCard({
   isUpdating: boolean;
   onAdvance: (order: OwnerOrder) => void;
 }) {
+  const { colors } = useOwnerTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   return (
     <Pressable
       onPress={() =>
@@ -146,6 +151,8 @@ function OrderCard({
 
 export default function OrdersScreen() {
   const queryClient = useQueryClient();
+  const { colors } = useOwnerTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [activeFilter, setActiveFilter] = useState<FilterKey>('All');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -220,7 +227,7 @@ export default function OrdersScreen() {
           <Pressable
             style={({ pressed }) => [pressed && styles.pressed]}
             onPress={() => router.push('/more')}>
-            <MaterialCommunityIcons name="menu" size={24} color="#1A1A1A" />
+            <MaterialCommunityIcons name="menu" size={24} color={colors.text} />
           </Pressable>
 
           <View style={styles.logoWrap}>
@@ -238,7 +245,7 @@ export default function OrdersScreen() {
               <MaterialCommunityIcons
                 name="account-circle"
                 size={32}
-                color="#AC1D10"
+                color={colors.accent}
               />
             </Pressable>
           </View>
@@ -247,11 +254,11 @@ export default function OrdersScreen() {
         <Animated.View
           entering={FadeInDown.delay(100).duration(400)}
           style={styles.searchWrap}>
-          <MaterialCommunityIcons name="magnify" size={18} color="#AAA" />
+          <MaterialCommunityIcons name="magnify" size={18} color={colors.subtleText} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search orders, customer, items..."
-            placeholderTextColor="#AAA"
+            placeholderTextColor={colors.subtleText}
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
@@ -263,7 +270,9 @@ export default function OrdersScreen() {
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              tintColor="#AC1D10"
+              tintColor={colors.accent}
+              colors={[colors.accent]}
+              progressBackgroundColor={colors.card}
               onRefresh={() => {
                 void ordersQuery.refetch();
               }}
@@ -324,7 +333,7 @@ export default function OrdersScreen() {
 
           {ordersQuery.isLoading ? (
             <View style={styles.stateContainer}>
-              <ActivityIndicator size="large" color="#AC1D10" />
+              <ActivityIndicator size="large" color={colors.accent} />
               <Text style={styles.stateText}>Fetching your orders...</Text>
             </View>
           ) : hasInitialError ? (
@@ -332,7 +341,7 @@ export default function OrdersScreen() {
               <MaterialCommunityIcons
                 name="alert-circle-outline"
                 size={48}
-                color="#CCC"
+                color={colors.subtleText}
               />
               <Text style={styles.emptyTitle}>Unable to load orders</Text>
               <Text style={styles.emptySubtitle}>
@@ -371,7 +380,7 @@ export default function OrdersScreen() {
               <MaterialCommunityIcons
                 name="clipboard-text-off-outline"
                 size={48}
-                color="#CCC"
+                color={colors.subtleText}
               />
               <Text style={styles.emptyTitle}>No orders found</Text>
               <Text style={styles.emptySubtitle}>
@@ -389,8 +398,8 @@ export default function OrdersScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F8F8F8' },
+const createStyles = (colors: OwnerThemeColors) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.background },
   container: { flex: 1 },
   pressed: { opacity: 0.7 },
 
@@ -413,17 +422,17 @@ const styles = StyleSheet.create({
   logoText: { color: '#FFF', fontSize: 8, fontWeight: '900' },
   logoTitle: {
     fontSize: 8,
-    color: '#1A1A1A',
+    color: colors.text,
     fontWeight: '500',
     lineHeight: 10,
   },
-  logoBold: { fontWeight: '900', color: '#AC1D10' },
+  logoBold: { fontWeight: '900', color: colors.accent },
   topBarRight: { flexDirection: 'row', alignItems: 'center' },
   avatarWrap: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#FBE7E4',
+    backgroundColor: colors.avatarBackground,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -434,25 +443,25 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E5E5E5',
-    backgroundColor: '#FFF',
+    borderColor: colors.border,
+    backgroundColor: colors.card,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
     gap: 8,
   },
-  searchInput: { flex: 1, fontSize: 13, color: '#1A1A1A' },
+  searchInput: { flex: 1, fontSize: 13, color: colors.text },
 
   scrollContent: { paddingHorizontal: 16 },
 
   pageTitle: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#1A1A1A',
+    color: colors.text,
   },
   pageSubtitle: {
     fontSize: 13,
-    color: '#888',
+    color: colors.mutedText,
     marginTop: 2,
     marginBottom: 14,
     lineHeight: 18,
@@ -470,24 +479,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: '#FFF',
+    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: '#E8E8E8',
+    borderColor: colors.border,
   },
   filterTabActive: {
-    backgroundColor: '#1A1A1A',
-    borderColor: '#1A1A1A',
+    backgroundColor: colors.text,
+    borderColor: colors.text,
   },
   filterText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#666',
+    color: colors.mutedText,
   },
   filterTextActive: {
-    color: '#FFF',
+    color: colors.background,
   },
   filterBadge: {
-    backgroundColor: '#AC1D10',
+    backgroundColor: colors.accent,
     borderRadius: 10,
     minWidth: 20,
     height: 20,
@@ -496,24 +505,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   filterBadgeActive: {
-    backgroundColor: '#FFF',
+    backgroundColor: colors.background,
   },
   filterBadgeText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#FFF',
+    color: colors.background,
   },
   filterBadgeTextActive: {
-    color: '#1A1A1A',
+    color: colors.text,
   },
 
   orderCard: {
-    backgroundColor: '#FFF',
+    backgroundColor: colors.card,
     borderRadius: 14,
     padding: 14,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#F0F0F0',
+    borderColor: colors.border,
   },
   orderTop: {
     flexDirection: 'row',
@@ -522,13 +531,13 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 2,
   },
-  orderNumber: { fontSize: 15, fontWeight: '700', color: '#1A1A1A' },
-  orderCustomer: { fontSize: 12, color: '#888', marginBottom: 6 },
-  orderItems: { fontSize: 13, color: '#555', marginBottom: 4, lineHeight: 18 },
+  orderNumber: { fontSize: 15, fontWeight: '700', color: colors.text },
+  orderCustomer: { fontSize: 12, color: colors.mutedText, marginBottom: 6 },
+  orderItems: { fontSize: 13, color: colors.icon, marginBottom: 4, lineHeight: 18 },
   orderTotal: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#1A1A1A',
+    color: colors.text,
     marginBottom: 6,
   },
   orderBottom: {
@@ -537,7 +546,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  orderMeta: { flex: 1, fontSize: 11, color: '#AAA' },
+  orderMeta: { flex: 1, fontSize: 11, color: colors.subtleText },
 
   stateContainer: {
     alignItems: 'center',
@@ -545,7 +554,7 @@ const styles = StyleSheet.create({
     paddingVertical: 56,
     gap: 10,
   },
-  stateText: { fontSize: 13, color: '#888', fontWeight: '600' },
+  stateText: { fontSize: 13, color: colors.mutedText, fontWeight: '600' },
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -555,19 +564,19 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#999',
+    color: colors.subtleText,
     textAlign: 'center',
   },
   emptySubtitle: {
     fontSize: 13,
-    color: '#BBB',
+    color: colors.mutedText,
     textAlign: 'center',
     lineHeight: 18,
   },
   retryBtn: {
     marginTop: 6,
     borderRadius: 10,
-    backgroundColor: '#AC1D10',
+    backgroundColor: colors.accent,
     paddingHorizontal: 18,
     paddingVertical: 10,
   },
