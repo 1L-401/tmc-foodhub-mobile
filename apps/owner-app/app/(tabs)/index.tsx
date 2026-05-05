@@ -26,6 +26,7 @@ import { fetchOwnerOrders, ownerOrderQueryKeys } from '@/services/orderService';
 import { fetchOwnerProfile } from '@/services/ownerProfileService';
 import { fetchInventoryItems, inventoryQueryKeys } from '@/services/inventoryService';
 import { useAuth } from '@/context/AuthContext';
+import { useOwnerTheme, type OwnerThemeColors } from '@/context/ThemeContext';
 import { useOwnerReviews } from '@/services/reviewService';
 import { resolveApiMediaUrl } from '@/src/api/apiConfig';
 
@@ -33,6 +34,8 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 /* ─── Simple Bar Chart ─── */
 function MiniBarChart({ data = [] }: { data?: { label: string; value: number }[] }) {
+  const { colors } = useOwnerTheme();
+  const chartStyles = React.useMemo(() => createChartStyles(colors), [colors]);
   const maxVal = Math.max(...data.map((d) => d.value), 1);
   return (
     <View style={chartStyles.container}>
@@ -70,6 +73,8 @@ function MiniBarChart({ data = [] }: { data?: { label: string; value: number }[]
 
 /* ─── Star Rating ─── */
 function StarRating({ rating }: { rating: number }) {
+  const { colors } = useOwnerTheme();
+
   return (
     <View style={{ flexDirection: 'row', gap: 2 }}>
       {[1, 2, 3, 4, 5].map((i) => (
@@ -77,7 +82,7 @@ function StarRating({ rating }: { rating: number }) {
           key={i}
           name={i <= rating ? 'star' : 'star-outline'}
           size={14}
-          color={i <= rating ? '#F59E0B' : '#D0D0D0'}
+          color={i <= rating ? '#F59E0B' : colors.border}
         />
       ))}
     </View>
@@ -130,6 +135,8 @@ function ActionButton({
 export default function DashboardScreen() {
   const headerScale = useSharedValue(0.95);
   const headerOpacity = useSharedValue(0);
+  const { colors } = useOwnerTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   const { user } = useAuth();
 
@@ -219,7 +226,7 @@ export default function DashboardScreen() {
           <Pressable
             style={({ pressed }) => [pressed && styles.pressed]}
             onPress={() => router.push('/more')}>
-            <MaterialCommunityIcons name="menu" size={24} color="#1A1A1A" />
+            <MaterialCommunityIcons name="menu" size={24} color={colors.text} />
           </Pressable>
 
           <View style={styles.logoWrap}>
@@ -237,7 +244,7 @@ export default function DashboardScreen() {
               <MaterialCommunityIcons
                 name="account-circle"
                 size={32}
-                color="#AC1D10"
+                color={colors.accent}
               />
             </Pressable>
           </View>
@@ -247,11 +254,11 @@ export default function DashboardScreen() {
         <Animated.View
           entering={FadeInDown.delay(200).duration(400)}
           style={styles.searchWrap}>
-          <MaterialCommunityIcons name="magnify" size={18} color="#AAA" />
+          <MaterialCommunityIcons name="magnify" size={18} color={colors.subtleText} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search anything..."
-            placeholderTextColor="#AAA"
+            placeholderTextColor={colors.subtleText}
           />
         </Animated.View>
 
@@ -295,7 +302,7 @@ export default function DashboardScreen() {
               </View>
               <Text style={styles.statLabel}>Active Orders</Text>
               <Text style={styles.statValue}>{stats.activeOrders}</Text>
-              <Text style={[styles.statGrowth, { color: '#059669' }]}>
+              <Text style={[styles.statGrowth, { color: '#34D399' }]}>
                 📈 {stats.activeOrdersGrowth}
               </Text>
             </View>
@@ -340,7 +347,7 @@ export default function DashboardScreen() {
               </AnimatedPressable>
             ))}
             {recentOrders.length === 0 && !isOrdersLoading && (
-               <Text style={{textAlign: 'center', color: '#999', marginTop: 10}}>No recent orders.</Text>
+               <Text style={styles.emptyInlineText}>No recent orders.</Text>
             )}
           </Animated.View>
 
@@ -371,7 +378,7 @@ export default function DashboardScreen() {
               </View>
             ))}
             {popularMenu.length === 0 && !isInventoryLoading && (
-               <Text style={{textAlign: 'center', color: '#999', marginTop: 10}}>No menu items available.</Text>
+               <Text style={styles.emptyInlineText}>No menu items available.</Text>
             )}
           </Animated.View>
 
@@ -384,7 +391,7 @@ export default function DashboardScreen() {
                 <MaterialCommunityIcons
                   name="chevron-down"
                   size={16}
-                  color="#888"
+                  color={colors.mutedText}
                 />
               </Pressable>
             </View>
@@ -407,7 +414,7 @@ export default function DashboardScreen() {
               <View key={review.id} style={styles.reviewCard}>
                 <View style={styles.reviewTop}>
                   <View style={[styles.reviewAvatar, { alignItems: 'center', justifyContent: 'center' }]}>
-                    <Text style={{ fontSize: 14, color: '#999', fontWeight: 'bold' }}>{review.customer_initials}</Text>
+                    <Text style={styles.reviewInitials}>{review.customer_initials}</Text>
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.reviewName}>{review.customer_name}</Text>
@@ -418,7 +425,7 @@ export default function DashboardScreen() {
               </View>
             ))}
             {recentReviews.length === 0 && !isReviewsLoading && (
-               <Text style={{textAlign: 'center', color: '#999', marginTop: 10}}>No recent reviews.</Text>
+               <Text style={styles.emptyInlineText}>No recent reviews.</Text>
             )}
           </Animated.View>
 
@@ -430,8 +437,8 @@ export default function DashboardScreen() {
 }
 
 /* ─── Styles ─── */
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F8F8F8' },
+const createStyles = (colors: OwnerThemeColors) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.background },
   container: { flex: 1 },
   pressed: { opacity: 0.7 },
 
@@ -453,14 +460,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   logoText: { color: '#FFF', fontSize: 8, fontWeight: '900' },
-  logoTitle: { fontSize: 8, color: '#1A1A1A', fontWeight: '500', lineHeight: 10 },
-  logoBold: { fontWeight: '900', color: '#AC1D10' },
+  logoTitle: { fontSize: 8, color: colors.text, fontWeight: '500', lineHeight: 10 },
+  logoBold: { fontWeight: '900', color: colors.accent },
   topBarRight: { flexDirection: 'row', alignItems: 'center' },
   avatarWrap: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#FBE7E4',
+    backgroundColor: colors.avatarBackground,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -472,44 +479,44 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E5E5E5',
-    backgroundColor: '#FFF',
+    borderColor: colors.border,
+    backgroundColor: colors.card,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
     gap: 8,
   },
-  searchInput: { flex: 1, fontSize: 13, color: '#1A1A1A' },
+  searchInput: { flex: 1, fontSize: 13, color: colors.text },
 
   scrollContent: { paddingHorizontal: 16 },
 
   /* Welcome */
-  dashboardTitle: { fontSize: 20, fontWeight: '800', color: '#1A1A1A' },
-  welcomeText: { fontSize: 13, color: '#888', marginTop: 2, marginBottom: 14 },
+  dashboardTitle: { fontSize: 20, fontWeight: '800', color: colors.text },
+  welcomeText: { fontSize: 13, color: colors.mutedText, marginTop: 2, marginBottom: 14 },
 
   /* Stats */
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 18 },
   statCard: {
     flex: 1,
-    backgroundColor: '#FFF',
+    backgroundColor: colors.card,
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#F0F0F0',
+    borderColor: colors.border,
   },
-  statCardPrimary: { borderColor: '#FCDCD8' },
+  statCardPrimary: { borderColor: colors.accent },
   statIconWrap: {
     width: 30,
     height: 30,
     borderRadius: 8,
-    backgroundColor: '#FBE7E4',
+    backgroundColor: colors.avatarBackground,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
   },
-  statLabel: { fontSize: 11, color: '#999', fontWeight: '500', marginBottom: 2 },
-  statValue: { fontSize: 28, fontWeight: '800', color: '#1A1A1A', marginBottom: 4 },
-  statGrowth: { fontSize: 10, color: '#AC1D10', fontWeight: '500' },
+  statLabel: { fontSize: 11, color: colors.subtleText, fontWeight: '500', marginBottom: 2 },
+  statValue: { fontSize: 28, fontWeight: '800', color: colors.text, marginBottom: 4 },
+  statGrowth: { fontSize: 10, color: colors.accent, fontWeight: '500' },
 
   /* Section */
   sectionRow: {
@@ -519,17 +526,17 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     marginTop: 4,
   },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#1A1A1A' },
-  viewAll: { fontSize: 13, fontWeight: '600', color: '#AC1D10' },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
+  viewAll: { fontSize: 13, fontWeight: '600', color: colors.accent },
 
   /* Order Card */
   orderCard: {
-    backgroundColor: '#FFF',
+    backgroundColor: colors.card,
     borderRadius: 14,
     padding: 14,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#F0F0F0',
+    borderColor: colors.border,
   },
   orderTop: {
     flexDirection: 'row',
@@ -537,69 +544,69 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 2,
   },
-  orderNumber: { fontSize: 15, fontWeight: '700', color: '#1A1A1A' },
-  orderCustomer: { fontSize: 12, color: '#888', marginBottom: 6 },
-  orderItems: { fontSize: 13, color: '#555', marginBottom: 4 },
-  orderTotal: { fontSize: 16, fontWeight: '800', color: '#1A1A1A', marginBottom: 6 },
+  orderNumber: { fontSize: 15, fontWeight: '700', color: colors.text },
+  orderCustomer: { fontSize: 12, color: colors.mutedText, marginBottom: 6 },
+  orderItems: { fontSize: 13, color: colors.icon, marginBottom: 4 },
+  orderTotal: { fontSize: 16, fontWeight: '800', color: colors.text, marginBottom: 6 },
   orderBottom: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  orderMeta: { fontSize: 11, color: '#AAA' },
+  orderMeta: { fontSize: 11, color: colors.subtleText },
 
   /* Menu Row */
   menuRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF',
+    backgroundColor: colors.card,
     borderRadius: 12,
     padding: 10,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#F0F0F0',
+    borderColor: colors.border,
     gap: 10,
   },
   menuImage: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: colors.avatarBackground,
   },
   menuInfo: { flex: 1 },
-  menuName: { fontSize: 14, fontWeight: '600', color: '#1A1A1A' },
-  menuOrders: { fontSize: 11, color: '#999', marginTop: 1 },
-  menuPrice: { fontSize: 15, fontWeight: '700', color: '#1A1A1A' },
+  menuName: { fontSize: 14, fontWeight: '600', color: colors.text },
+  menuOrders: { fontSize: 11, color: colors.subtleText, marginTop: 1 },
+  menuPrice: { fontSize: 15, fontWeight: '700', color: colors.text },
 
   /* Chart */
   chartCard: {
-    backgroundColor: '#FFF',
+    backgroundColor: colors.card,
     borderRadius: 14,
     padding: 14,
     marginBottom: 18,
     borderWidth: 1,
-    borderColor: '#F0F0F0',
+    borderColor: colors.border,
   },
   periodPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
     borderWidth: 1,
-    borderColor: '#E5E5E5',
+    borderColor: colors.border,
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 3,
   },
-  periodText: { fontSize: 11, color: '#888' },
+  periodText: { fontSize: 11, color: colors.mutedText },
 
   /* Review */
   reviewCard: {
-    backgroundColor: '#FFF',
+    backgroundColor: colors.card,
     borderRadius: 14,
     padding: 14,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#F0F0F0',
+    borderColor: colors.border,
   },
   reviewTop: {
     flexDirection: 'row',
@@ -611,10 +618,16 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: colors.avatarBackground,
   },
-  reviewName: { fontSize: 14, fontWeight: '700', color: '#1A1A1A' },
-  reviewText: { fontSize: 13, color: '#555', lineHeight: 19 },
+  reviewName: { fontSize: 14, fontWeight: '700', color: colors.text },
+  reviewText: { fontSize: 13, color: colors.icon, lineHeight: 19 },
+  reviewInitials: { fontSize: 14, color: colors.accent, fontWeight: 'bold' },
+  emptyInlineText: {
+    textAlign: 'center',
+    color: colors.subtleText,
+    marginTop: 10,
+  },
 });
 
 const badgeStyles = StyleSheet.create({
@@ -628,7 +641,7 @@ const actionStyles = StyleSheet.create({
   pressed: { opacity: 0.8 },
 });
 
-const chartStyles = StyleSheet.create({
+const createChartStyles = (colors: OwnerThemeColors) => StyleSheet.create({
   container: { flexDirection: 'row', height: 120 },
   bars: { flex: 1, flexDirection: 'row', alignItems: 'flex-end', gap: 6 },
   barCol: { flex: 1, alignItems: 'center' },
@@ -638,16 +651,16 @@ const chartStyles = StyleSheet.create({
     justifyContent: 'flex-end',
     borderRadius: 4,
     overflow: 'hidden',
-    backgroundColor: '#F5F5F5',
+    backgroundColor: colors.surface,
   },
-  barFill: { backgroundColor: '#FCDCD8', borderRadius: 4 },
-  barHighlight: { backgroundColor: '#AC1D10' },
-  barLabel: { fontSize: 10, color: '#AAA', marginTop: 4 },
+  barFill: { backgroundColor: colors.avatarBackground, borderRadius: 4 },
+  barHighlight: { backgroundColor: colors.accent },
+  barLabel: { fontSize: 10, color: colors.subtleText, marginTop: 4 },
   yLabels: {
     justifyContent: 'space-between',
     paddingVertical: 2,
     width: 32,
     alignItems: 'flex-end',
   },
-  yText: { fontSize: 9, color: '#CCC' },
+  yText: { fontSize: 9, color: colors.subtleText },
 });

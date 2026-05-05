@@ -4,13 +4,17 @@ import React from 'react';
 import { Platform, StyleSheet } from 'react-native';
 
 import { HapticTab } from '@/components/haptic-tab';
+import { useOwnerTheme, type OwnerThemeColors } from '@/context/ThemeContext';
 
 export default function TabLayout() {
+  const { colors } = useOwnerTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#AC1D10',
-        tabBarInactiveTintColor: '#999',
+        tabBarActiveTintColor: colors.accent,
+        tabBarInactiveTintColor: colors.subtleText,
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarShowLabel: true,
@@ -76,16 +80,17 @@ export default function TabLayout() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: OwnerThemeColors) => StyleSheet.create({
   tabBar: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    borderTopWidth: 0,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
     height: Platform.OS === 'ios' ? 84 : 70,
     paddingTop: 6,
     paddingBottom: Platform.OS === 'ios' ? 24 : 10,

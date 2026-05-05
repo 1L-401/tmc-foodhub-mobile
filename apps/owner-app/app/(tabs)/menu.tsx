@@ -20,6 +20,7 @@ import Animated, { FadeInDown, FadeInRight } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CustomToggle } from '@/components/custom-toggle';
+import { useOwnerTheme, type OwnerThemeColors } from '@/context/ThemeContext';
 import { resolveApiMediaUrl } from '@/src/api/apiConfig';
 import {
   fetchInventoryItems,
@@ -215,13 +216,16 @@ function MenuItemCard({
   onPress: () => void;
   onToggleAvailability: (id: string, value: boolean) => void;
 }) {
+  const { colors } = useOwnerTheme();
+  const themedCardStyles = useMemo(() => createThemedCardStyles(colors), [colors]);
+
   return (
     <Animated.View
       entering={FadeInDown.delay(200 + index * 60).duration(400)}
-      style={[cardStyles.card, { width: CARD_WIDTH }]}>
+      style={[cardStyles.card, themedCardStyles.card, { width: CARD_WIDTH }]}>
       <Pressable onPress={onPress}>
         <View style={cardStyles.imageWrap}>
-          <Image source={{ uri: item.image }} style={cardStyles.image} />
+          <Image source={{ uri: item.image }} style={[cardStyles.image, themedCardStyles.image]} />
           {item.isBestSeller && (
             <View style={cardStyles.bestSellerWrap}>
               <BestSellerBadge />
@@ -231,14 +235,14 @@ function MenuItemCard({
 
         <View style={cardStyles.info}>
           <View style={cardStyles.nameRow}>
-            <Text style={cardStyles.name} numberOfLines={1}>
+            <Text style={[cardStyles.name, themedCardStyles.text]} numberOfLines={1}>
               {item.name}
             </Text>
-            <Text style={cardStyles.price}>
+            <Text style={[cardStyles.price, themedCardStyles.text]}>
               ${item.price.toFixed(2)}
             </Text>
           </View>
-          <Text style={cardStyles.description} numberOfLines={2}>
+          <Text style={[cardStyles.description, themedCardStyles.mutedText]} numberOfLines={2}>
             {item.description}
           </Text>
         </View>
@@ -809,6 +813,8 @@ function AddItemModal({
    ══════════════════════════════════════════════ */
 export default function MenuManagementScreen() {
   const queryClient = useQueryClient();
+  const { colors } = useOwnerTheme();
+  const themedStyles = useMemo(() => createThemedStyles(colors), [colors]);
 
   /* ─── Queries ─── */
   const { data: rawCategories = [], isLoading: isLoadingCategories } = useQuery<InventoryCategory[]>({
@@ -1039,7 +1045,7 @@ export default function MenuManagementScreen() {
 
   /* ─── Render ─── */
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={[styles.safe, themedStyles.safe]} edges={['top']}>
       <View style={styles.container}>
         {/* ── Top Bar ── */}
         <Animated.View
@@ -1048,25 +1054,25 @@ export default function MenuManagementScreen() {
           <Pressable
             style={({ pressed }) => [pressed && styles.pressed]}
             onPress={() => router.push('/more')}>
-            <MaterialCommunityIcons name="menu" size={24} color="#1A1A1A" />
+            <MaterialCommunityIcons name="menu" size={24} color={colors.text} />
           </Pressable>
 
           <View style={styles.logoWrap}>
             <View style={styles.logoIcon}>
               <Text style={styles.logoText}>TMC</Text>
             </View>
-            <Text style={styles.logoTitle}>
+            <Text style={[styles.logoTitle, themedStyles.text]}>
               FOOD{'\n'}
               <Text style={styles.logoBold}>HUB</Text>
             </Text>
           </View>
 
           <View style={styles.topBarRight}>
-            <Pressable style={styles.avatarWrap}>
+            <Pressable style={[styles.avatarWrap, themedStyles.avatarWrap]}>
               <MaterialCommunityIcons
                 name="account-circle"
                 size={32}
-                color="#AC1D10"
+                color={colors.accent}
               />
             </Pressable>
           </View>
@@ -1075,12 +1081,12 @@ export default function MenuManagementScreen() {
         {/* ── Search ── */}
         <Animated.View
           entering={FadeInDown.delay(100).duration(400)}
-          style={styles.searchWrap}>
-          <MaterialCommunityIcons name="magnify" size={18} color="#AAA" />
+          style={[styles.searchWrap, themedStyles.searchWrap]}>
+          <MaterialCommunityIcons name="magnify" size={18} color={colors.subtleText} />
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, themedStyles.text]}
             placeholder="Search items..."
-            placeholderTextColor="#AAA"
+            placeholderTextColor={colors.subtleText}
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
@@ -1091,8 +1097,8 @@ export default function MenuManagementScreen() {
           contentContainerStyle={styles.scrollContent}>
           {/* ── Title ── */}
           <Animated.View entering={FadeInDown.delay(150).duration(400)}>
-            <Text style={styles.pageTitle}>Menu Management</Text>
-            <Text style={styles.pageSubtitle}>
+            <Text style={[styles.pageTitle, themedStyles.text]}>Menu Management</Text>
+            <Text style={[styles.pageSubtitle, themedStyles.mutedText]}>
               Add, edit, or remove dishes and update descriptions, prices, and
               availability.
             </Text>
@@ -1113,11 +1119,13 @@ export default function MenuManagementScreen() {
                     onPress={() => setActiveCategory(cat.key)}
                     style={[
                       styles.filterTab,
+                      themedStyles.filterTab,
                       isActive && styles.filterTabActive,
                     ]}>
                     <Text
                       style={[
                         styles.filterText,
+                        themedStyles.mutedText,
                         isActive && styles.filterTextActive,
                       ]}>
                       {cat.label}
@@ -1125,11 +1133,13 @@ export default function MenuManagementScreen() {
                     <View
                       style={[
                         styles.filterBadge,
+                        themedStyles.filterBadge,
                         isActive && styles.filterBadgeActive,
                       ]}>
                       <Text
                         style={[
                           styles.filterBadgeText,
+                          themedStyles.subtleText,
                           isActive && styles.filterBadgeTextActive,
                         ]}>
                         {count}
@@ -1147,29 +1157,31 @@ export default function MenuManagementScreen() {
             style={styles.toolbarRow}>
             <View style={styles.toolbarLeft}>
               <SortDropdown selected={sortBy} onSelect={setSortBy} />
-              <View style={styles.viewToggle}>
+              <View style={[styles.viewToggle, themedStyles.border]}>
                 <Pressable
                   style={[
                     styles.viewToggleBtn,
+                    themedStyles.viewToggleBtn,
                     viewMode === 'grid' && styles.viewToggleBtnActive,
                   ]}
                   onPress={() => setViewMode('grid')}>
                   <MaterialCommunityIcons
                     name="view-grid"
                     size={16}
-                    color={viewMode === 'grid' ? '#AC1D10' : '#999'}
+                    color={viewMode === 'grid' ? colors.accent : colors.subtleText}
                   />
                 </Pressable>
                 <Pressable
                   style={[
                     styles.viewToggleBtn,
+                    themedStyles.viewToggleBtn,
                     viewMode === 'list' && styles.viewToggleBtnActive,
                   ]}
                   onPress={() => setViewMode('list')}>
                   <MaterialCommunityIcons
                     name="view-list"
                     size={16}
-                    color={viewMode === 'list' ? '#AC1D10' : '#999'}
+                    color={viewMode === 'list' ? colors.accent : colors.subtleText}
                   />
                 </Pressable>
               </View>
@@ -1189,7 +1201,7 @@ export default function MenuManagementScreen() {
           {/* ── Menu Grid / List ── */}
           {isLoading ? (
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 40 }}>
-              <ActivityIndicator size="large" color="#AC1D10" />
+              <ActivityIndicator size="large" color={colors.accent} />
             </View>
           ) : filteredItems.length > 0 ? (
             viewMode === 'grid' ? (
@@ -1220,21 +1232,21 @@ export default function MenuManagementScreen() {
                     key={item.id}
                     entering={FadeInRight.delay(200 + i * 60).duration(400)}>
                     <Pressable
-                      style={styles.listItem}
+                      style={[styles.listItem, themedStyles.listItem]}
                       onPress={() => handleOpenDetail(item)}>
                       <Image
                         source={{ uri: item.image }}
-                        style={styles.listImage}
+                        style={[styles.listImage, themedStyles.imageBackground]}
                       />
                       <View style={styles.listInfo}>
-                        <Text style={styles.listName}>{item.name}</Text>
+                        <Text style={[styles.listName, themedStyles.text]}>{item.name}</Text>
                         <Text
-                          style={styles.listDescription}
+                          style={[styles.listDescription, themedStyles.subtleText]}
                           numberOfLines={1}>
                           {item.description}
                         </Text>
                         <View style={styles.listBottom}>
-                          <Text style={styles.listPrice}>
+                          <Text style={[styles.listPrice, themedStyles.text]}>
                             ${item.price.toFixed(2)}
                           </Text>
                           <StockBadge status={item.stockStatus} />
@@ -1259,10 +1271,10 @@ export default function MenuManagementScreen() {
               <MaterialCommunityIcons
                 name="food-off"
                 size={48}
-                color="#CCC"
+                color={colors.subtleText}
               />
-              <Text style={styles.emptyTitle}>No menu items found</Text>
-              <Text style={styles.emptySubtitle}>
+              <Text style={[styles.emptyTitle, themedStyles.subtleText]}>No menu items found</Text>
+              <Text style={[styles.emptySubtitle, themedStyles.mutedText]}>
                 {searchQuery
                   ? 'Try a different search term'
                   : 'No items match this filter'}
@@ -1313,6 +1325,36 @@ export default function MenuManagementScreen() {
 /* ══════════════════════════════════════════════
    Styles
    ══════════════════════════════════════════════ */
+const createThemedStyles = (colors: OwnerThemeColors) => StyleSheet.create({
+  safe: { backgroundColor: colors.background },
+  text: { color: colors.text },
+  mutedText: { color: colors.mutedText },
+  subtleText: { color: colors.subtleText },
+  border: { borderColor: colors.border },
+  avatarWrap: { backgroundColor: colors.avatarBackground },
+  searchWrap: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+  },
+  filterTab: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+  },
+  filterBadge: {
+    backgroundColor: colors.surface,
+  },
+  viewToggleBtn: {
+    backgroundColor: colors.card,
+  },
+  listItem: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+  },
+  imageBackground: {
+    backgroundColor: colors.avatarBackground,
+  },
+});
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#F8F8F8' },
   container: { flex: 1 },
@@ -1503,6 +1545,22 @@ const styles = StyleSheet.create({
 });
 
 /* ─── Card Styles ─── */
+const createThemedCardStyles = (colors: OwnerThemeColors) => StyleSheet.create({
+  card: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+  },
+  image: {
+    backgroundColor: colors.avatarBackground,
+  },
+  text: {
+    color: colors.text,
+  },
+  mutedText: {
+    color: colors.mutedText,
+  },
+});
+
 const cardStyles = StyleSheet.create({
   card: {
     backgroundColor: '#FFF',
