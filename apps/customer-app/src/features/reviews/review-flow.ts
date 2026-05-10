@@ -4,6 +4,7 @@ import { MMKV } from 'react-native-mmkv';
 import { apiClient } from '@/src/api/apiClient';
 import { fetchRestaurants } from '@/src/features/browse/api/useRestaurants';
 
+// @ts-ignore
 const storage = Platform.OS !== 'web' ? new MMKV() : null;
 const REVIEWED_ORDERS_KEY = 'customer_reviewed_orders';
 

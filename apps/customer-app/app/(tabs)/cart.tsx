@@ -9,6 +9,7 @@ import {
   View,
   RefreshControl,
   Animated,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -340,7 +341,7 @@ const styles = StyleSheet.create({
 
   /* ── Bottom Spacer ── */
   bottomSpacer: {
-    height: 280,
+    height: 380,
   },
 
   /* ── Bottom Sheet ── */
@@ -354,7 +355,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     paddingHorizontal: 18,
     paddingTop: 18,
-    paddingBottom: 24,
+    paddingBottom: Platform.OS === 'ios' ? 112 : 108,
     elevation: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },

@@ -8,14 +8,16 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
   }),
 });
 
 export function usePushNotifications() {
   const [expoPushToken, setExpoPushToken] = useState('');
   const [notification, setNotification] = useState<Notifications.Notification | null>(null);
-  const notificationListener = useRef<Notifications.Subscription>();
-  const responseListener = useRef<Notifications.Subscription>();
+  const notificationListener = useRef<any>(null);
+  const responseListener = useRef<any>(null);
 
   useEffect(() => {
     registerForPushNotificationsAsync().then((token) => {
