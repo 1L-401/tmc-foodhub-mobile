@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import { MMKV } from 'react-native-mmkv';
 
+// @ts-ignore
 const storage = Platform.OS !== 'web' ? new MMKV() : null;
 const STORAGE_KEY = 'customer_local_order_status_overrides';
 

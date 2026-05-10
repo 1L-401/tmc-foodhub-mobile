@@ -1,7 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useCallback } from 'react';
 import {
   Image,
   Pressable,
@@ -22,7 +22,12 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { fetchOwnerOrders, ownerOrderQueryKeys } from '@/services/orderService';
+import { 
+  fetchOwnerOrders, 
+  ownerOrderQueryKeys,
+  updateOwnerOrderStatus,
+  getNextOrderStatus
+} from '@/services/orderService';
 import { fetchOwnerProfile } from '@/services/ownerProfileService';
 import { fetchInventoryItems, inventoryQueryKeys } from '@/services/inventoryService';
 import { useAuth } from '@/context/AuthContext';
@@ -107,9 +112,13 @@ function StatusBadge({ status }: { status: string }) {
 function ActionButton({
   label,
   status,
+  onPress,
+  disabled
 }: {
   label: string;
   status: string;
+  onPress?: () => void;
+  disabled?: boolean;
 }) {
   const cfg = {
     new: { bg: '#AC1D10', text: '#FFF', label: 'Accept' },
@@ -117,12 +126,18 @@ function ActionButton({
     ready: { bg: '#E5E7EB', text: '#374151', label: 'Mark done' },
   }[status] ?? { bg: '#E5E7EB', text: '#666', label };
 
+  if (!cfg.label || cfg.label === label) {
+    if (!label) return null;
+  }
+
   return (
     <Pressable
+      onPress={onPress}
+      disabled={disabled}
       style={({ pressed }) => [
         actionStyles.btn,
         { backgroundColor: cfg.bg },
-        pressed && actionStyles.pressed,
+        (pressed || disabled) && actionStyles.pressed,
       ]}>
       <Text style={[actionStyles.text, { color: cfg.text }]}>
         {cfg.label}
@@ -137,6 +152,7 @@ export default function DashboardScreen() {
   const headerOpacity = useSharedValue(0);
   const { colors } = useOwnerTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const queryClient = useQueryClient();
 
   const { user } = useAuth();
 
@@ -153,8 +169,36 @@ export default function DashboardScreen() {
   const { data: orders = [], isLoading: isOrdersLoading } = useQuery({
     queryKey: ownerOrderQueryKeys.all,
     queryFn: fetchOwnerOrders,
-    refetchInterval: 1000 * 30, // Fallback polling before WebSockets
+    refetchInterval: 5000, // Optimized fast polling for live incoming orders
+    refetchOnWindowFocus: true,
   });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string | number; status: any }) => 
+      updateOwnerOrderStatus(id, status),
+    onMutate: async ({ id, status }) => {
+      // Optimistic Update
+      await queryClient.cancelQueries({ queryKey: ownerOrderQueryKeys.all });
+      const previousOrders = queryClient.getQueryData(ownerOrderQueryKeys.all);
+      queryClient.setQueryData(ownerOrderQueryKeys.all, (old: any) => 
+        old?.map((order: any) => order.id === id ? { ...order, status } : order)
+      );
+      return { previousOrders };
+    },
+    onError: (err, newTodo, context) => {
+      queryClient.setQueryData(ownerOrderQueryKeys.all, context?.previousOrders);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ownerOrderQueryKeys.all });
+    },
+  });
+
+  const handleAdvanceStatus = useCallback((order: any) => {
+    const nextStatus = getNextOrderStatus(order.status);
+    if (nextStatus) {
+      updateStatusMutation.mutate({ id: order.id, status: nextStatus });
+    }
+  }, [updateStatusMutation]);
 
   const { data: inventoryItems = [], isLoading: isInventoryLoading } = useQuery({
     queryKey: inventoryQueryKeys.items,
@@ -342,7 +386,14 @@ export default function DashboardScreen() {
                   <Text style={styles.orderMeta}>
                     {order.paymentMethod.toUpperCase()} • {order.timeAgo}
                   </Text>
-                  <ActionButton label="" status={order.status.toLowerCase().replace(' ', '_')} />
+                  {getNextOrderStatus(order.status) && (
+                    <ActionButton 
+                      label="" 
+                      status={order.status.toLowerCase().replace(' ', '_')} 
+                      onPress={() => handleAdvanceStatus(order)}
+                      disabled={updateStatusMutation.isPending}
+                    />
+                  )}
                 </View>
               </AnimatedPressable>
             ))}

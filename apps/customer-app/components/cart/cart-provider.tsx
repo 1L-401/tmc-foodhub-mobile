@@ -10,6 +10,7 @@ import { apiClient } from '@/src/api/apiClient';
 import type { CartItemModel, SavedAddress } from './types';
 
 // ── Persistent Local Storage ──
+// @ts-ignore
 const storage = Platform.OS !== 'web' ? new MMKV() : null;
 
 function getStorageString(key: string): string | null {
@@ -370,7 +371,7 @@ export function CartProvider({ children }: React.PropsWithChildren) {
         body: JSON.stringify(payload),
       });
 
-      const discountVal = response.discount_amount ?? response.discount ?? response.amount ?? 0;
+      const discountVal = response.promotion?.calculated_discount ?? response.discount_amount ?? response.discount ?? response.amount ?? 0;
       setAppliedDiscount(Number(discountVal));
       
       const { Alert } = require('react-native');

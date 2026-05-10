@@ -2,6 +2,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Modal,
   Pressable,
@@ -13,55 +14,29 @@ import {
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiClient } from '@/src/api/apiClient';
 
 /* ─── Types ─── */
-type PromoStatus = 'Active' | 'Scheduled' | 'Expired';
+type PromoStatus = 'Active' | 'Scheduled' | 'Expired' | 'Inactive';
 type FilterType = 'All' | PromoStatus;
 
 interface Promotion {
   id: string;
-  title: string;
-  subtitle: string;
-  dates: string;
-  badgeText: string;
+  name: string;
+  code: string;
+  appliesTo: string;
+  type: string;
+  value: string;
+  validDates: string;
   status: PromoStatus;
+  raw_status: string;
+  raw_start_date: string;
+  raw_end_date: string;
+  discount_type: string;
+  discount_value: number;
+  minimum_order_value?: number;
 }
-
-/* ─── Mock Data ─── */
-const INITIAL_PROMOTIONS: Promotion[] = [
-  {
-    id: '1',
-    title: 'Lunch Rush Special',
-    subtitle: 'Applies to: All Lunch Bowls',
-    dates: 'Mar 2 - Mar 6, 2026',
-    badgeText: '20% Off',
-    status: 'Active',
-  },
-  {
-    id: '2',
-    title: 'Weekend Feast',
-    subtitle: 'Fixed ₱50 Off',
-    dates: 'Mar 9 - Mar 13, 2026',
-    badgeText: 'Fixed ₱50 Off',
-    status: 'Active',
-  },
-  {
-    id: '3',
-    title: 'BOGO Burger Day',
-    subtitle: 'BOGO Burger Day',
-    dates: 'Mar 8, 2026',
-    badgeText: 'Buy 1, Get 1',
-    status: 'Scheduled',
-  },
-  {
-    id: '4',
-    title: 'Free Delivery Monday',
-    subtitle: 'Applies to: Orders > ₱300',
-    dates: 'Feb 23, 2026',
-    badgeText: 'Free Delivery',
-    status: 'Expired',
-  },
-];
 
 /* ══════════════════════════════════════════════
    Promo Card
@@ -98,17 +73,17 @@ function PromoCard({
       style={cardStyles.container}>
       <View style={cardStyles.topRow}>
         <View style={cardStyles.infoWrap}>
-          <Text style={cardStyles.title}>{promo.title}</Text>
-          <Text style={cardStyles.subtitle}>{promo.subtitle}</Text>
+          <Text style={cardStyles.title}>{promo.name}</Text>
+          <Text style={cardStyles.subtitle}>Code: {promo.code} • {promo.appliesTo}</Text>
         </View>
         <View style={cardStyles.promoBadge}>
           <MaterialCommunityIcons name="ticket-percent-outline" size={14} color="#AC1D10" />
-          <Text style={cardStyles.promoBadgeText}>{promo.badgeText}</Text>
+          <Text style={cardStyles.promoBadgeText}>{promo.value}</Text>
         </View>
       </View>
 
       <View style={cardStyles.bottomRow}>
-        <Text style={cardStyles.dates}>{promo.dates}</Text>
+        <Text style={cardStyles.dates}>{promo.validDates}</Text>
 
         <View style={cardStyles.rightActions}>
           <View style={[cardStyles.statusBadge, { backgroundColor: statusStyle.bg }]}>
@@ -169,65 +144,79 @@ function PromotionFormModal({
   promotion,
   onClose,
   onSave,
+  isSaving,
 }: {
   visible: boolean;
   promotion: Promotion | null;
   onClose: () => void;
-  onSave: (data: Partial<Promotion>) => void;
+  onSave: (data: any) => void;
+  isSaving: boolean;
 }) {
   const isEdit = promotion !== null;
   const [name, setName] = useState('');
-  const [type, setType] = useState('Percentage Off (%)');
+  const [code, setCode] = useState('');
+  const [type, setType] = useState('percentage');
   const [discountValue, setDiscountValue] = useState('');
   const [minOrder, setMinOrder] = useState('');
-  const [applicability, setApplicability] = useState<'all' | 'specific'>('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [status, setStatus] = useState('active');
 
   React.useEffect(() => {
     if (visible) {
       if (promotion) {
-        setName(promotion.title);
-        // Resetting other fields for simulation
-        setType('Percentage Off (%)');
-        setDiscountValue('20');
-        setMinOrder('0');
-        setApplicability('all');
-        const [start, end] = promotion.dates.split(' - ');
-        setStartDate(start || '03/02/2026');
-        setEndDate(end || '03/06/2026');
+        setName(promotion.name);
+        setCode(promotion.code);
+        setType(promotion.discount_type);
+        setDiscountValue(String(promotion.discount_value));
+        setMinOrder(promotion.minimum_order_value ? String(promotion.minimum_order_value) : '');
+        setStartDate(promotion.raw_start_date.split('T')[0]);
+        setEndDate(promotion.raw_end_date.split('T')[0]);
+        setStatus(promotion.raw_status);
       } else {
         setName('');
-        setType('Percentage Off (%)');
+        setCode('');
+        setType('percentage');
         setDiscountValue('');
         setMinOrder('');
-        setApplicability('all');
-        setStartDate('');
-        setEndDate('');
+        setStartDate(new Date().toISOString().split('T')[0]);
+        const nextWeek = new Date();
+        nextWeek.setDate(nextWeek.getDate() + 7);
+        setEndDate(nextWeek.toISOString().split('T')[0]);
+        setStatus('active');
       }
     }
   }, [visible, promotion]);
 
   const handleSave = () => {
-    if (!name.trim()) {
-      Alert.alert('Validation', 'Please enter a promotion name.');
+    if (!name.trim() || !code.trim() || !discountValue.trim() || !startDate.trim() || !endDate.trim()) {
+      Alert.alert('Validation', 'Please fill in all required fields.');
       return;
     }
-    
-    // Simplistic text generator for mockup logic
-    let badgeText = 'Discount';
-    if (type.includes('%')) badgeText = `${discountValue || 0}% Off`;
-    else if (type.includes('Fixed')) badgeText = `Fixed ₱${discountValue || 0} Off`;
-    else if (type.includes('BOGO')) badgeText = 'Buy 1, Get 1';
-    else if (type.includes('Delivery')) badgeText = 'Free Delivery';
 
     onSave({
-      title: name,
-      badgeText,
-      subtitle: applicability === 'all' ? 'Applies to: All Menu Items' : 'Applies to: Specific Items',
-      dates: `${startDate || 'ASAP'} - ${endDate || 'TBD'}`,
-      status: 'Scheduled', // default mock status
+      name,
+      code,
+      discount_type: type,
+      discount_value: Number(discountValue),
+      minimum_order_value: minOrder ? Number(minOrder) : null,
+      start_date: startDate,
+      end_date: endDate,
+      status,
     });
+  };
+
+  const toggleType = () => {
+    const types = ['percentage', 'fixed', 'free_delivery'];
+    const nextIdx = (types.indexOf(type) + 1) % types.length;
+    setType(types[nextIdx]);
+  };
+
+  const getTypeText = () => {
+    if (type === 'percentage') return 'Percentage Off (%)';
+    if (type === 'fixed') return 'Fixed Amount (₱)';
+    if (type === 'free_delivery') return 'Free Delivery';
+    return 'BOGO';
   };
 
   return (
@@ -238,7 +227,7 @@ function PromotionFormModal({
             <Text style={modalStyles.headerTitle}>
               {isEdit ? 'Edit Promotion' : 'Create New Promotion'}
             </Text>
-            <Pressable onPress={onClose}>
+            <Pressable onPress={onClose} disabled={isSaving}>
               <MaterialCommunityIcons name="close" size={20} color="#666" />
             </Pressable>
           </View>
@@ -253,16 +242,20 @@ function PromotionFormModal({
                   style={modalStyles.input}
                   value={name}
                   onChangeText={setName}
-                  placeholder="e.g. Summer Pizza Party"
+                  placeholder="e.g. Summer Party"
                   placeholderTextColor="#AAA"
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={modalStyles.label}>Promotion Type</Text>
-                <View style={modalStyles.inputDropdown}>
-                  <Text style={modalStyles.inputText}>{type}</Text>
-                  <MaterialCommunityIcons name="chevron-down" size={16} color="#888" />
-                </View>
+                <Text style={modalStyles.label}>Promo Code</Text>
+                <TextInput
+                  style={modalStyles.input}
+                  value={code}
+                  onChangeText={setCode}
+                  placeholder="e.g. SUMMER20"
+                  autoCapitalize="characters"
+                  placeholderTextColor="#AAA"
+                />
               </View>
             </View>
 
@@ -270,9 +263,16 @@ function PromotionFormModal({
             <Text style={modalStyles.sectionTitle}>Discount Configuration</Text>
             <View style={modalStyles.rowForm}>
               <View style={{ flex: 1 }}>
+                <Text style={modalStyles.label}>Promotion Type</Text>
+                <Pressable style={modalStyles.inputDropdown} onPress={toggleType}>
+                  <Text style={modalStyles.inputText}>{getTypeText()}</Text>
+                  <MaterialCommunityIcons name="chevron-down" size={16} color="#888" />
+                </Pressable>
+              </View>
+              <View style={{ flex: 1 }}>
                 <Text style={modalStyles.label}>Discount Value</Text>
                 <View style={modalStyles.inputWrapPrefix}>
-                  <MaterialCommunityIcons name="currency-php" size={16} color="#888" />
+                  <MaterialCommunityIcons name={type === 'percentage' ? "percent" : "currency-php"} size={16} color="#888" />
                   <TextInput
                     style={modalStyles.inputNoBorder}
                     value={discountValue}
@@ -280,11 +280,16 @@ function PromotionFormModal({
                     placeholder="0.00"
                     placeholderTextColor="#AAA"
                     keyboardType="numeric"
+                    editable={type !== 'free_delivery'}
                   />
                 </View>
               </View>
+            </View>
+
+            {/* Section 3: More Configuration */}
+            <View style={modalStyles.rowForm}>
               <View style={{ flex: 1 }}>
-                <Text style={modalStyles.label}>Minimum Order Value</Text>
+                <Text style={modalStyles.label}>Min Order (Optional)</Text>
                 <View style={modalStyles.inputWrapPrefix}>
                   <MaterialCommunityIcons name="currency-php" size={16} color="#888" />
                   <TextInput
@@ -299,62 +304,8 @@ function PromotionFormModal({
               </View>
             </View>
 
-            {/* Section 3: Applicability */}
-            <Text style={modalStyles.sectionTitle}>Applicability</Text>
-            <View style={modalStyles.radioGroup}>
-              <View style={modalStyles.radioRow}>
-                <Pressable
-                  style={modalStyles.radioItem}
-                  onPress={() => setApplicability('all')}>
-                  <MaterialCommunityIcons
-                    name={applicability === 'all' ? 'radiobox-marked' : 'radiobox-blank'}
-                    size={20}
-                    color={applicability === 'all' ? '#AC1D10' : '#CCC'}
-                  />
-                  <Text style={modalStyles.radioLabel}>All Menu Items</Text>
-                </Pressable>
-                <Pressable
-                  style={modalStyles.radioItem}
-                  onPress={() => setApplicability('specific')}>
-                  <MaterialCommunityIcons
-                    name={applicability === 'specific' ? 'radiobox-marked' : 'radiobox-blank'}
-                    size={20}
-                    color={applicability === 'specific' ? '#AC1D10' : '#CCC'}
-                  />
-                  <Text style={modalStyles.radioLabel}>Specific Categories/Items</Text>
-                </Pressable>
-              </View>
-            </View>
-            
-            {applicability === 'specific' && (
-              <Animated.View entering={FadeInDown.duration(200)}>
-                <View style={[modalStyles.searchWrap, { marginTop: 8 }]}>
-                  <MaterialCommunityIcons name="magnify" size={16} color="#AAA" />
-                  <TextInput
-                    style={[modalStyles.inputNoBorder, { flex: 1 }]}
-                    placeholder="Search items..."
-                    placeholderTextColor="#AAA"
-                  />
-                </View>
-                <View style={modalStyles.tagsRow}>
-                  <View style={modalStyles.tag}>
-                    <Text style={modalStyles.tagText}>Breakfast Meals</Text>
-                    <MaterialCommunityIcons name="close" size={14} color="#AC1D10" />
-                  </View>
-                  <View style={modalStyles.tag}>
-                    <Text style={modalStyles.tagText}>Signature Pasta</Text>
-                    <MaterialCommunityIcons name="close" size={14} color="#AC1D10" />
-                  </View>
-                  <View style={modalStyles.tag}>
-                    <Text style={modalStyles.tagText}>Beverages</Text>
-                    <MaterialCommunityIcons name="close" size={14} color="#AC1D10" />
-                  </View>
-                </View>
-              </Animated.View>
-            )}
-
             {/* Section 4: Date Schedule */}
-            <Text style={[modalStyles.sectionTitle, { marginTop: applicability === 'all' ? 0 : 10 }]}>Date Schedule</Text>
+            <Text style={modalStyles.sectionTitle}>Date Schedule</Text>
             <View style={modalStyles.rowForm}>
               <View style={{ flex: 1 }}>
                 <Text style={modalStyles.label}>Start Date</Text>
@@ -363,7 +314,7 @@ function PromotionFormModal({
                     style={{ flex: 1, fontSize: 13, color: '#1A1A1A' }}
                     value={startDate}
                     onChangeText={setStartDate}
-                    placeholder="mm/dd/yyyy"
+                    placeholder="YYYY-MM-DD"
                     placeholderTextColor="#AAA"
                   />
                   <MaterialCommunityIcons name="calendar-blank-outline" size={16} color="#888" />
@@ -376,7 +327,7 @@ function PromotionFormModal({
                     style={{ flex: 1, fontSize: 13, color: '#1A1A1A' }}
                     value={endDate}
                     onChangeText={setEndDate}
-                    placeholder="mm/dd/yyyy"
+                    placeholder="YYYY-MM-DD"
                     placeholderTextColor="#AAA"
                   />
                   <MaterialCommunityIcons name="calendar-blank-outline" size={16} color="#888" />
@@ -386,11 +337,15 @@ function PromotionFormModal({
 
             {/* Buttons */}
             <View style={modalStyles.buttonRow}>
-              <Pressable style={({ pressed }) => [modalStyles.cancelBtn, pressed && { opacity: 0.7 }]} onPress={onClose}>
+              <Pressable style={({ pressed }) => [modalStyles.cancelBtn, pressed && { opacity: 0.7 }]} onPress={onClose} disabled={isSaving}>
                 <Text style={modalStyles.cancelBtnText}>Cancel</Text>
               </Pressable>
-              <Pressable style={({ pressed }) => [modalStyles.saveBtn, pressed && { opacity: 0.8 }]} onPress={handleSave}>
-                <Text style={modalStyles.saveBtnText}>Save Promotion</Text>
+              <Pressable style={({ pressed }) => [modalStyles.saveBtn, pressed && { opacity: 0.8 }]} onPress={handleSave} disabled={isSaving}>
+                {isSaving ? (
+                   <ActivityIndicator color="#FFF" size="small" />
+                ) : (
+                  <Text style={modalStyles.saveBtnText}>Save Promotion</Text>
+                )}
               </Pressable>
             </View>
 
@@ -405,16 +360,61 @@ function PromotionFormModal({
    Main Screen
    ══════════════════════════════════════════════ */
 export default function PromotionsScreen() {
-  const [promotions, setPromotions] = useState<Promotion[]>(INITIAL_PROMOTIONS);
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterType>('All');
   
   const [showFormModal, setShowFormModal] = useState(false);
   const [editingPromo, setEditingPromo] = useState<Promotion | null>(null);
 
+  const { data: promotions = [], isLoading } = useQuery<Promotion[]>({
+    queryKey: ['promotions'],
+    queryFn: () => apiClient('/promotions'),
+  });
+
+  const createPromo = useMutation({
+    mutationFn: (data: any) => apiClient('/promotions', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['promotions'] });
+      setShowFormModal(false);
+    },
+    onError: (error: any) => {
+      Alert.alert('Error', error.message || 'Failed to create promotion');
+    }
+  });
+  
+  const updatePromo = useMutation({
+    mutationFn: ({ id, ...data }: any) => apiClient(`/promotions/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['promotions'] });
+      setShowFormModal(false);
+    },
+    onError: (error: any) => {
+      Alert.alert('Error', error.message || 'Failed to update promotion');
+    }
+  });
+  
+  const deletePromo = useMutation({
+    mutationFn: (id: string) => apiClient(`/promotions/${id}`, {
+      method: 'DELETE',
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['promotions'] });
+    },
+    onError: (error: any) => {
+      Alert.alert('Error', error.message || 'Failed to delete promotion');
+    }
+  });
+
   /* ─── Filtered ─── */
   const filtered = promotions.filter(p => {
-    const matchesSearch = p.title.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.code.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesFilter = activeFilter === 'All' || p.status === activeFilter;
     return matchesSearch && matchesFilter;
   });
@@ -435,47 +435,29 @@ export default function PromotionsScreen() {
   const handleDelete = useCallback((promo: Promotion) => {
     Alert.alert(
       'Delete Promotion',
-      `Are you sure you want to delete "${promo.title}"?`,
+      `Are you sure you want to delete "${promo.name}"?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
-            setPromotions((prev) => prev.filter((p) => p.id !== promo.id));
+            deletePromo.mutate(promo.id);
           },
         },
       ],
     );
-  }, []);
+  }, [deletePromo]);
 
   const handleSave = useCallback(
-    (data: Partial<Promotion>) => {
+    (data: any) => {
       if (editingPromo) {
-        setPromotions((prev) =>
-          prev.map((p) =>
-            p.id === editingPromo.id ? { ...p, ...data } : p,
-          ),
-        );
-        Alert.alert('Success', `"${data.title}" has been updated.`, [
-          { text: 'OK', onPress: () => setShowFormModal(false) },
-        ]);
+        updatePromo.mutate({ id: editingPromo.id, ...data });
       } else {
-        const newPromo: Promotion = {
-          id: Date.now().toString(),
-          title: data.title || '',
-          subtitle: data.subtitle || '',
-          dates: data.dates || '',
-          badgeText: data.badgeText || '',
-          status: data.status || 'Active',
-        };
-        setPromotions((prev) => [newPromo, ...prev]);
-        Alert.alert('Success', `"${data.title}" has been created.`, [
-          { text: 'OK', onPress: () => setShowFormModal(false) },
-        ]);
+        createPromo.mutate(data);
       }
     },
-    [editingPromo],
+    [editingPromo, createPromo, updatePromo],
   );
 
   return (
@@ -525,7 +507,9 @@ export default function PromotionsScreen() {
             </Text>
           </Animated.View>
 
-          {hasAnyData ? (
+          {isLoading ? (
+            <ActivityIndicator size="large" color="#AC1D10" style={{ marginTop: 40 }} />
+          ) : hasAnyData ? (
             <>
               {/* ── Filters ── */}
               <Animated.View entering={FadeInDown.delay(200).duration(400)} style={filterStyles.container}>
@@ -549,20 +533,6 @@ export default function PromotionsScreen() {
                   <MaterialCommunityIcons name="plus" size={14} color="#FFF" />
                   <Text style={styles.addBtnText}>Add Promotion</Text>
                 </Pressable>
-              </Animated.View>
-
-              {/* ── Stats ── */}
-              <Animated.View entering={FadeInDown.delay(300).duration(400)} style={statsStyles.container}>
-                <View style={statsStyles.card}>
-                  <Text style={statsStyles.label}>Avg. Promotion Conversion</Text>
-                  <Text style={statsStyles.value}>24.5%</Text>
-                  <Text style={statsStyles.sub}>+2.4% vs last month</Text>
-                </View>
-                <View style={statsStyles.card}>
-                  <Text style={statsStyles.label}>Promo-Assisted Sales</Text>
-                  <Text style={statsStyles.value}>₱124,500</Text>
-                  <Text style={statsStyles.sub}>Current active campaigns</Text>
-                </View>
               </Animated.View>
 
               {/* ── Promotions List ── */}
@@ -599,6 +569,7 @@ export default function PromotionsScreen() {
           setEditingPromo(null);
         }}
         onSave={handleSave}
+        isSaving={createPromo.isPending || updatePromo.isPending}
       />
     </SafeAreaView>
   );
@@ -692,22 +663,6 @@ const filterStyles = StyleSheet.create({
   tabTextActive: { color: '#FFF', fontWeight: '700' },
 });
 
-/* Stats */
-const statsStyles = StyleSheet.create({
-  container: { flexDirection: 'row', gap: 12, marginBottom: 20 },
-  card: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#F0F0F0',
-    borderRadius: 10,
-    padding: 12,
-    backgroundColor: '#FFF',
-  },
-  label: { fontSize: 10, color: '#999', marginBottom: 4, fontWeight: '500' },
-  value: { fontSize: 16, fontWeight: '800', color: '#1A1A1A', marginBottom: 2 },
-  sub: { fontSize: 9, color: '#888' },
-});
-
 /* Promo Card */
 const cardStyles = StyleSheet.create({
   container: {
@@ -776,20 +731,10 @@ const modalStyles = StyleSheet.create({
   inputText: { fontSize: 13, color: '#1A1A1A' },
   inputWrapPrefix: { borderWidth: 1, borderColor: '#E5E5E5', borderRadius: 8, paddingHorizontal: 10, backgroundColor: '#FFF', flexDirection: 'row', alignItems: 'center' },
   inputNoBorder: { flex: 1, paddingVertical: 10, fontSize: 13, color: '#1A1A1A', marginLeft: 4 },
-  searchWrap: { borderWidth: 1, borderColor: '#E5E5E5', borderRadius: 8, paddingHorizontal: 10, backgroundColor: '#FAFAFA', flexDirection: 'row', alignItems: 'center' },
-  
-  radioGroup: { marginBottom: 10 },
-  radioRow: { flexDirection: 'row', gap: 16 },
-  radioItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  radioLabel: { fontSize: 12, color: '#555' },
-  
-  tagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10, marginBottom: 16 },
-  tag: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FCECEC', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, gap: 4 },
-  tagText: { fontSize: 11, color: '#AC1D10', fontWeight: '500' },
   
   buttonRow: { flexDirection: 'row', gap: 10, marginTop: 16, justifyContent: 'center' },
   cancelBtn: { flex: 1, borderWidth: 1.5, borderColor: '#E5E5E5', borderRadius: 8, paddingVertical: 12, alignItems: 'center', backgroundColor: '#FFF' },
   cancelBtnText: { fontSize: 13, fontWeight: '700', color: '#666' },
-  saveBtn: { flex: 1, backgroundColor: '#AC1D10', borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
+  saveBtn: { flex: 1, backgroundColor: '#AC1D10', borderRadius: 8, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' },
   saveBtnText: { fontSize: 13, fontWeight: '700', color: '#FFF' },
 });

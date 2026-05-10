@@ -717,7 +717,7 @@ export default function SignUpScreen() {
             
             <View style={styles.progressContainer}>
               <View style={styles.progressBarBackground}>
-                <Animated.View style={[styles.progressBarFill, { width }]} />
+                <Animated.View style={[styles.progressBarFill, { width: width as any }]} />
               </View>
               <View style={styles.progressTextRow}>
                 <Text style={styles.progressStepText}>{text}</Text>

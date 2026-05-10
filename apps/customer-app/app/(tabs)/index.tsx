@@ -36,6 +36,8 @@ import {
   ORDER_AGAIN,
   FILTERS,
 } from '@/constants/mock-data';
+import { isDeliveredStatus } from '@/src/features/orders/order-status';
+import { getRestaurantIdFromSource } from '@/src/features/reviews/review-flow';
 
 // ── Component ─────────────────────────────────────────────────
 export default function HomeScreen() {
@@ -59,14 +61,28 @@ export default function HomeScreen() {
     const mapped = [];
 
     for (const o of pastOrders) {
-      if (o.status !== 'Delivered') continue;
+      if (!isDeliveredStatus(o.status)) continue;
       
-      const restId = String(o.restaurant_id || o.store?.id || o.restaurant?.id || o.id);
+      let restId = getRestaurantIdFromSource(o);
+
+      if (!restId && o.store_name && restaurants) {
+        const storeNameLower = String(o.store_name).trim().toLowerCase();
+        const matched = restaurants.find(
+          (r: any) =>
+            String(r.name).trim().toLowerCase() === storeNameLower ||
+            String(r.restaurant_name).trim().toLowerCase() === storeNameLower
+        );
+        if (matched) {
+          restId = String(matched.id);
+        }
+      }
+
+      if (!restId) continue;
       if (uniqueStores.has(restId)) continue;
       uniqueStores.add(restId);
 
       const matchedRestaurant = restaurants?.find((r: any) => String(r.id) === restId);
-      const rawImage = matchedRestaurant?.cover_photo || o.store?.cover_photo || o.store?.image || o.items?.[0]?.image;
+      const rawImage = (matchedRestaurant as any)?.cover_photo || (matchedRestaurant as any)?.cover_image || o.store?.cover_photo || o.store?.image || o.items?.[0]?.image;
       
       const imageUrl = rawImage 
         ? (rawImage.startsWith('http') ? rawImage : `https://foodhub.tmc-innovations.com${rawImage}`)
@@ -74,10 +90,10 @@ export default function HomeScreen() {
 
       mapped.push({
         id: restId,
-        name: o.store_name || 'Restaurant',
+        name: o.store_name || matchedRestaurant?.name || 'Restaurant',
         category: o.items?.[0]?.item_name || 'Food Item',
-        rating: 5.0, 
-        reviews: 99,
+        rating: matchedRestaurant?.rating || 5.0, 
+        reviews: (matchedRestaurant as any)?.reviews_count || matchedRestaurant?.reviews || 99,
         price: Number(o.total || 0),
         time: 'Order Again',
         color: '#FBE7E4',
@@ -87,7 +103,7 @@ export default function HomeScreen() {
       if (mapped.length >= 5) break;
     }
     return mapped;
-  }, [pastOrders]);
+  }, [pastOrders, restaurants]);
 
   const headerScale = useSharedValue(0.95);
   const headerOpacity = useSharedValue(0);

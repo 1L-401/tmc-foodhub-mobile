@@ -158,7 +158,7 @@ export default function ProfileScreen() {
 
           <Pressable style={styles.gridCard} onPress={() => router.push('/add-payment-method')}>
             <View style={styles.gridIconWrap}>
-              <MaterialCommunityIcons name={preferredPayment?.icon || 'wallet'} size={20} color="#AC1D10" />
+              <MaterialCommunityIcons name={(preferredPayment?.icon as any) || 'wallet'} size={20} color="#AC1D10" />
             </View>
             <Text style={styles.gridSectionLabel}>PAYMENT METHOD</Text>
             <Text style={styles.gridTitle}>{preferredPayment?.label || 'Cash'}</Text>

@@ -1,9 +1,10 @@
 import React from 'react';
-import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
+import { StyleProp, StyleSheet, View, ViewStyle, Text } from 'react-native';
 
 type SectionCardProps = {
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
+  title?: string;
   backgroundColor?: string;
   borderColor?: string;
 };
@@ -11,6 +12,7 @@ type SectionCardProps = {
 export function SectionCard({
   children,
   style,
+  title,
   backgroundColor,
   borderColor,
 }: SectionCardProps) {
@@ -21,6 +23,11 @@ export function SectionCard({
         { backgroundColor: backgroundColor ?? '#EFEFEF', borderColor: borderColor ?? '#E2E2E2' },
         style,
       ]}>
+      {title && (
+        <View style={styles.titleContainer}>
+          <Text style={styles.titleText}>{title}</Text>
+        </View>
+      )}
       {children}
     </View>
   );
@@ -36,5 +43,16 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
     overflow: 'hidden',
+  },
+  titleContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  titleText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#666666',
+    letterSpacing: 0.5,
   },
 });
